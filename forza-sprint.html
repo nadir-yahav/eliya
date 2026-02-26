@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Forza Sprint</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="bg-glow glow-1"></div>
+    <div class="bg-glow glow-2"></div>
+
+    <header class="topbar container">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span>Xbox Games Hub</span>
+      </div>
+      <nav class="menu">
+        <a href="index.html">בית</a>
+        <a href="index.html#games">משחקים</a>
+      </nav>
+      <a href="index.html" class="btn btn-outline">חזרה</a>
+    </header>
+
+    <main class="wrapper container">
+      <section class="game-page panel">
+        <h1>Forza Sprint</h1>
+        <p class="hint">מירוץ אינסופי: התחמק מכלי רכב, שמור על קו נקי, וצבור ניקוד.</p>
+
+        <section class="forza-hud">
+          <div class="hud-item">ניקוד: <strong id="fsScore">0</strong></div>
+          <div class="hud-item">מהירות: <strong id="fsSpeed">1.0x</strong></div>
+          <div class="hud-item">שיא: <strong id="fsBest">0</strong></div>
+          <button id="fsRestartBtn" class="btn">התחל מחדש</button>
+        </section>
+
+        <section class="game-shell">
+          <canvas id="forzaCanvas" width="960" height="540" aria-label="Forza Sprint board"></canvas>
+          <div id="fsOverlay" class="overlay hidden">
+            <h2 id="fsOverlayTitle">בהצלחה</h2>
+            <p id="fsOverlayText"></p>
+            <button id="fsOverlayBtn" class="btn">שחק שוב</button>
+          </div>
+        </section>
+
+        <div class="page-actions">
+          <a href="index.html" class="btn btn-primary">חזרה לפורטל</a>
+        </div>
+      </section>
+    </main>
+    <script src="forza-sprint.js"></script>
+  </body>
+</html>

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pac-Man X</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="bg-glow glow-1"></div>
+    <div class="bg-glow glow-2"></div>
+
+    <header class="topbar container">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span>Xbox Games Hub</span>
+      </div>
+      <nav class="menu">
+        <a href="index.html">בית</a>
+        <a href="index.html#games">משחקים</a>
+      </nav>
+      <a href="index.html" class="btn btn-outline">חזרה</a>
+    </header>
+
+    <main class="wrapper container">
+      <section class="game-page panel">
+        <h1>Pac-Man X</h1>
+        <p class="hint">גרסת הארקייד המתקדמת עם שליטה מלאה ברוחות, מהירות וקושי.</p>
+
+        <section class="hud">
+          <div class="hud-item">ניקוד: <strong id="score">0</strong></div>
+          <div class="hud-item">חיים: <strong id="lives">3</strong></div>
+          <div class="hud-item">נקודות שנותרו: <strong id="pellets">0</strong></div>
+          <div class="hud-item">
+            <label for="difficultySelect">רמה:</label>
+            <select id="difficultySelect" class="difficulty-select">
+              <option value="easy">קל</option>
+              <option value="medium" selected>בינוני</option>
+              <option value="hard">קשה</option>
+            </select>
+          </div>
+          <div class="hud-item">
+            <label for="ghostCountInput">רוחות:</label>
+            <input id="ghostCountInput" class="hud-input" type="number" min="1" max="1000" value="103" />
+          </div>
+          <div class="hud-item">
+            <label for="ghostSpeedInput">מהירות:</label>
+            <div class="speed-wrap">
+              <input id="ghostSpeedInput" class="speed-range" type="range" min="1" max="10" value="5" />
+              <strong id="ghostSpeedValue">5</strong>
+            </div>
+          </div>
+          <button id="restartBtn" class="btn">התחל מחדש</button>
+        </section>
+
+        <section class="game-shell">
+          <canvas id="gameCanvas" width="560" height="560" aria-label="Pac-Man board"></canvas>
+          <div id="overlay" class="overlay hidden">
+            <h2 id="overlayTitle">בהצלחה</h2>
+            <p id="overlayText"></p>
+            <button id="overlayBtn" class="btn">שחק שוב</button>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>

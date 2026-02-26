@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Halo Arena</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="bg-glow glow-1"></div>
+    <div class="bg-glow glow-2"></div>
+
+    <header class="topbar container">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span>Xbox Games Hub</span>
+      </div>
+      <nav class="menu">
+        <a href="index.html">בית</a>
+        <a href="index.html#games">משחקים</a>
+      </nav>
+      <a href="index.html" class="btn btn-outline">חזרה</a>
+    </header>
+
+    <main class="wrapper container">
+      <section class="game-page panel">
+        <h1>Halo Arena</h1>
+        <p class="hint">קרבות ארנה תחרותיים: WASD או חיצים לתנועה, המטוס יורה תמיד אוטומטית לכיוון האויב הקרוב ביותר, `Shift` לדאש ו־`Space` ל־Pulse.</p>
+
+        <section class="arena-hud">
+          <div class="hud-item">ניקוד: <strong id="haScore">0</strong></div>
+          <div class="hud-item">חיים: <strong id="haHealth">100</strong></div>
+          <div class="hud-item">גל: <strong id="haWave">1</strong></div>
+          <div class="hud-item">נשק: <strong id="haWeapon">Rifle</strong></div>
+          <div class="hud-item">Dash: <strong id="haDash">Ready</strong></div>
+          <div class="hud-item">Pulse: <strong id="haPulse">Ready</strong></div>
+          <button id="haFullscreenBtn" class="btn">מסך מלא</button>
+          <button id="haRestartBtn" class="btn">התחל מחדש</button>
+        </section>
+
+        <section class="game-shell">
+          <canvas id="arenaCanvas" width="960" height="540" aria-label="Halo Arena board"></canvas>
+          <div id="haOverlay" class="overlay hidden">
+            <h2 id="haOverlayTitle">Halo Arena</h2>
+            <p id="haOverlayText"></p>
+            <button id="haOverlayBtn" class="btn">שחק שוב</button>
+          </div>
+          <div id="haUpgrade" class="overlay hidden">
+            <h2>בחר שדרוג לשלב הבא</h2>
+            <p id="haUpgradeText">כל שלב נותן 6 אפשרויות חדשות</p>
+            <div class="upgrade-grid">
+              <button id="haUpg1" class="btn upgrade-btn">שדרוג 1</button>
+              <button id="haUpg2" class="btn upgrade-btn">שדרוג 2</button>
+              <button id="haUpg3" class="btn upgrade-btn">שדרוג 3</button>
+              <button id="haUpg4" class="btn upgrade-btn">שדרוג 4</button>
+              <button id="haUpg5" class="btn upgrade-btn">שדרוג 5</button>
+              <button id="haUpg6" class="btn upgrade-btn">שדרוג 6</button>
+            </div>
+          </div>
+        </section>
+
+        <div class="page-actions">
+          <a href="index.html" class="btn btn-primary">חזרה לפורטל</a>
+        </div>
+      </section>
+    </main>
+    <script src="halo-arena.js"></script>
+  </body>
+</html>
