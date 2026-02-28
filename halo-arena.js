@@ -6,6 +6,7 @@ const arenaDom = {
   weapon: document.getElementById("haWeapon"),
   dash: document.getElementById("haDash"),
   pulse: document.getElementById("haPulse"),
+  musicBtn: document.getElementById("haMusicBtn"),
   fullscreenBtn: document.getElementById("haFullscreenBtn"),
   restartBtn: document.getElementById("haRestartBtn"),
   overlay: document.getElementById("haOverlay"),
@@ -20,16 +21,25 @@ const arenaDom = {
   upg4: document.getElementById("haUpg4"),
   upg5: document.getElementById("haUpg5"),
   upg6: document.getElementById("haUpg6"),
+  planeDock: document.getElementById("haPlaneDock"),
+  planeList: document.getElementById("haPlaneList"),
+  planeActive: document.getElementById("haPlaneActive"),
+  coins: document.getElementById("haCoins"),
+  touchDash: document.getElementById("haTouchDash"),
+  touchPulse: document.getElementById("haTouchPulse"),
 };
 
 if (arenaDom.canvas) {
-  const ctx = arenaDom.canvas.getContext("2d");
+  const ctx = arenaDom.canvas.getContext("2d", { alpha: true });
+  arenaDom.canvas.classList.add("arena-canvas");
   const WIDTH = arenaDom.canvas.width;
   const HEIGHT = arenaDom.canvas.height;
   const fullscreenTarget = arenaDom.canvas.closest(".game-shell") || arenaDom.canvas;
 
   const keys = new Set();
   const aim = { x: 0, y: -1, angle: -Math.PI / 2 };
+  const gamepadInput = { moveX: 0, moveY: 0, dashPressed: false, pulsePressed: false };
+  const touchInput = { active: false, pointerId: null, targetX: 0, targetY: 0 };
 
   const THEMES = [
     {
@@ -142,43 +152,388 @@ if (arenaDom.canvas) {
     },
   ];
 
-  const UPGRADE_OPTIONS_PER_STAGE = 6;
+  // מערכת רמות שדרוגים
+  const UPGRADE_TIERS = [
+    {
+      name: "ירוק",
+      color: "#2ecc40",
+      chance: 0.40,
+      power: 1.05,
+      health: 1.05,
+    },
+    {
+      name: "כחול",
+      color: "#3498db",
+      chance: 0.30,
+      power: 1.12,
+      health: 1.12,
+    },
+    {
+      name: "סגול",
+      color: "#9b59b6",
+      chance: 0.25,
+      power: 1.18,
+      health: 1.18,
+    },
+    {
+      name: "אדום",
+      color: "#e74c3c",
+      chance: 0.20,
+      power: 1.25,
+      health: 1.25,
+    },
+    {
+      name: "אגדי",
+      color: "#f1c40f",
+      chance: 0.10,
+      power: 1.35,
+      health: 1.35,
+    },
+    {
+      name: "צהוב",
+      color: "#ffff00",
+      chance: 0.10,
+      power: 1.40,
+      health: 1.40,
+    },
+    {
+      name: "קשת",
+      color: "linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet)",
+      chance: 0.05,
+      power: 1.50,
+      health: 1.50,
+    },
+  ];
 
+  const UPGRADE_OPTIONS_PER_STAGE = 6;
+  const MAX_PLANES = 1000;
+  const PLANE_PROGRESS_KEY = "haloArenaPlaneProgressV2";
+  const CREATOR_MODE_KEY = "haloArenaCreatorModeV2";
+  const CREATOR_ACCESS_CODE = "HALO-CREATOR-ONLY-2026";
+  const SERVANT_RESPAWN_MS = 3000;
+  const SERVANT_BURST_SHOTS = 3;
+  const SERVANT_BURST_INTERVAL_MS = 90;
+  const PLANE_ARCHETYPES = [
+    { name: "Assault", damage: 1.08, fireRate: 0.95, speed: 1.03, dash: 1.05, pulsePower: 1.05, pulseRadius: 1.03, shots: 0, damageReduction: 0.02, regen: 0.2 },
+    { name: "Guardian", damage: 1.04, fireRate: 0.98, speed: 1.01, dash: 1.03, pulsePower: 1.06, pulseRadius: 1.08, shots: 0, damageReduction: 0.05, regen: 0.8 },
+    { name: "Striker", damage: 1.06, fireRate: 0.96, speed: 1.08, dash: 1.12, pulsePower: 1.02, pulseRadius: 1.01, shots: 0, damageReduction: 0.01, regen: 0.2 },
+    { name: "Nova", damage: 1.05, fireRate: 0.97, speed: 1.02, dash: 1.04, pulsePower: 1.14, pulseRadius: 1.12, shots: 1, damageReduction: 0.02, regen: 0.3 },
+    { name: "Storm", damage: 1.12, fireRate: 0.93, speed: 1.05, dash: 1.06, pulsePower: 1.08, pulseRadius: 1.04, shots: 1, damageReduction: 0.01, regen: 0.1 },
+  ];
+
+  function buildPlaneCatalog() {
+    return Array.from({ length: MAX_PLANES }, (_, index) => {
+      const id = index + 1;
+      const archetype = PLANE_ARCHETYPES[index % PLANE_ARCHETYPES.length];
+      const hue = (index * 31) % 360;
+      const tierBoost = 1 + id * 0.012;
+      return {
+        id,
+        name: `מטוס ${id}`,
+        title: `Type-${id} ${archetype.name}`,
+        primary: `hsl(${hue}, 92%, 62%)`,
+        secondary: `hsl(${(hue + 48) % 360}, 95%, 72%)`,
+        glow: `hsla(${hue}, 100%, 75%, 0.75)`,
+        damageMult: archetype.damage * tierBoost,
+        fireRateMult: Math.max(0.45, archetype.fireRate - id * 0.0036),
+        speedMult: archetype.speed + id * 0.006,
+        dashMult: archetype.dash + id * 0.008,
+        dashCooldownMult: Math.max(0.45, 1 - id * 0.003),
+        pulsePowerMult: archetype.pulsePower + id * 0.007,
+        pulseRadiusMult: archetype.pulseRadius + id * 0.003,
+        shotBonus: Math.min(5, archetype.shots + Math.floor(id / 25)),
+        damageReduction: Math.min(0.38, archetype.damageReduction + id * 0.0025),
+        regenPerSecond: archetype.regen + id * 0.05,
+        wingScale: 1 + id * 0.005,
+        startHpBonus: 14 + id * 4,
+        startShieldLayers: Math.min(5, Math.floor(id / 20)),
+        startRapidMs: Math.floor(id / 10) * 500,
+        startSpreadMs: id >= 30 ? Math.floor((id - 20) / 10) * 450 : 0,
+        startPowerMs: id >= 40 ? Math.floor((id - 30) / 10) * 500 : 0,
+      };
+    });
+  }
+
+  function getUnlockedPlaneCountForStage(stage) {
+    const completedStages = Math.max(0, stage - 1);
+    return Math.min(MAX_PLANES, 1 + completedStages);
+  }
+
+  function loadPlaneProgress() {
+    try {
+      const raw = localStorage.getItem(PLANE_PROGRESS_KEY);
+      if (!raw) {
+        return { unlockedPlaneCount: 1, activePlaneId: 1, creatorMode: false, coins: 0 };
+      }
+
+      const parsed = JSON.parse(raw);
+      const unlockedPlaneCount = clamp(Number(parsed.unlockedPlaneCount) || 1, 1, MAX_PLANES);
+      const activePlaneId = clamp(Number(parsed.activePlaneId) || unlockedPlaneCount, 1, unlockedPlaneCount);
+      const creatorMode = parsed.creatorMode === true;
+      const coins = Math.max(0, Number(parsed.coins) || 0);
+      return { unlockedPlaneCount, activePlaneId, creatorMode, coins };
+    } catch {
+      return { unlockedPlaneCount: 1, activePlaneId: 1, creatorMode: false, coins: 0 };
+    }
+  }
+
+  function savePlaneProgress() {
+    try {
+      localStorage.setItem(
+        PLANE_PROGRESS_KEY,
+        JSON.stringify({
+          unlockedPlaneCount: state.unlockedPlaneCount,
+          activePlaneId: state.activePlaneId,
+          creatorMode: state.creatorMode,
+          coins: state.coins,
+        })
+      );
+    } catch {
+      // ignore storage failures
+    }
+  }
+
+  // שדרוגים עם tier קבוע
   const UPGRADE_POOL = [
+      // --- שדרוגים חדשים וחזקים במיוחד ---
+      {
+        title: "Godlike Barrage",
+        desc: "פי 4 קליעים, נזק פי 4",
+        tier: UPGRADE_TIERS[4], // אגדי
+        apply: (player, tier) => {
+          player.shotCount = Math.min(player.shotCount * 4, 20);
+          player.bulletDamage *= 4 * tier.power;
+          player.maxHp = Math.floor(player.maxHp * tier.health);
+        },
+      },
+      {
+        title: "Immortal Shield",
+        desc: "פי 4 שכבות מגן, חיים פי 4",
+        tier: UPGRADE_TIERS[4],
+        apply: (player, tier) => {
+          player.shieldLayers = Math.min(player.shieldLayers * 4, 20);
+          player.maxHp *= 4;
+          player.hp = player.maxHp;
+        },
+      },
+      {
+        title: "Ultra Pulse",
+        desc: "Pulse פי 4 חזק ומהיר",
+        tier: UPGRADE_TIERS[4],
+        apply: (player, tier) => {
+          player.pulsePower *= 4;
+          player.pulseRadius *= 1.3;
+          player.pulseCooldownBase *= 0.25;
+        },
+      },
+      {
+        title: "Dash God",
+        desc: "Dash פי 4 חזק ומהיר",
+        tier: UPGRADE_TIERS[4],
+        apply: (player, tier) => {
+          player.dashPower *= 4;
+          player.dashCooldownBase *= 0.25;
+        },
+      },
+      {
+        title: "Speed Demon",
+        desc: "מהירות פי 4",
+        tier: UPGRADE_TIERS[4],
+        apply: (player, tier) => {
+          player.speed *= 4;
+        },
+      },
+      {
+        title: "Bullet Storm",
+        desc: "פי 2 קליעים, פי 2 נזק",
+        tier: UPGRADE_TIERS[3],
+        apply: (player, tier) => {
+          player.shotCount = Math.min(player.shotCount * 2, 14);
+          player.bulletDamage *= 2 * tier.power;
+        },
+      },
+      {
+        title: "Titanic Health",
+        desc: "חיים פי 2",
+        tier: UPGRADE_TIERS[3],
+        apply: (player, tier) => {
+          player.maxHp *= 2;
+          player.hp = player.maxHp;
+        },
+      },
+      {
+        title: "Pulse Nova",
+        desc: "Pulse פי 2 חזק ומהיר",
+        tier: UPGRADE_TIERS[3],
+        apply: (player, tier) => {
+          player.pulsePower *= 2;
+          player.pulseRadius *= 1.15;
+          player.pulseCooldownBase *= 0.5;
+        },
+      },
+      {
+        title: "Dash Master",
+        desc: "Dash פי 2 חזק ומהיר",
+        tier: UPGRADE_TIERS[3],
+        apply: (player, tier) => {
+          player.dashPower *= 2;
+          player.dashCooldownBase *= 0.5;
+        },
+      },
+      {
+        title: "Speed Burst",
+        desc: "מהירות פי 2",
+        tier: UPGRADE_TIERS[3],
+        apply: (player, tier) => {
+          player.speed *= 2;
+        },
+      },
+      {
+        title: "Rapid Regen",
+        desc: "ריפוי אוטומטי מהיר מאוד",
+        tier: UPGRADE_TIERS[2],
+        apply: (player, tier) => {
+          player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.5);
+        },
+      },
+      {
+        title: "Shield Overload",
+        desc: "פי 3 שכבות מגן",
+        tier: UPGRADE_TIERS[2],
+        apply: (player, tier) => {
+          player.shieldLayers = Math.min(player.shieldLayers * 3, 30);
+        },
+      },
+      {
+        title: "Pulse Chain",
+        desc: "Pulse פוגע פעמיים",
+        tier: UPGRADE_TIERS[2],
+        apply: (player, tier) => {
+          player.pulsePower *= 2;
+        },
+      },
+      {
+        title: "Dash Chain",
+        desc: "Dash פועל פעמיים ברצף",
+        tier: UPGRADE_TIERS[2],
+        apply: (player, tier) => {
+          player.dashPower *= 2;
+        },
+      },
+      {
+        title: "Speed Chain",
+        desc: "מהירות מוכפלת",
+        tier: UPGRADE_TIERS[2],
+        apply: (player, tier) => {
+          player.speed *= 2;
+        },
+      },
+      {
+        title: "Bullet Chain",
+        desc: "פי 2 קליעים",
+        tier: UPGRADE_TIERS[1],
+        apply: (player, tier) => {
+          player.shotCount = Math.min(player.shotCount * 2, 20);
+        },
+      },
+      {
+        title: "Health Chain",
+        desc: "חיים מוכפלים",
+        tier: UPGRADE_TIERS[1],
+        apply: (player, tier) => {
+          player.maxHp *= 2;
+          player.hp = player.maxHp;
+        },
+      },
+      {
+        title: "Pulse Quick",
+        desc: "Pulse פי 2 מהיר",
+        tier: UPGRADE_TIERS[1],
+        apply: (player, tier) => {
+          player.pulseCooldownBase *= 0.5;
+        },
+      },
+      {
+        title: "Dash Quick",
+        desc: "Dash פי 2 מהיר",
+        tier: UPGRADE_TIERS[1],
+        apply: (player, tier) => {
+          player.dashCooldownBase *= 0.5;
+        },
+      },
+      {
+        title: "Speed Quick",
+        desc: "מהירות פי 2",
+        tier: UPGRADE_TIERS[1],
+        apply: (player, tier) => {
+          player.speed *= 2;
+        },
+      },
+      {
+        title: "Bullet Quick",
+        desc: "קליעים מהירים פי 2",
+        tier: UPGRADE_TIERS[0],
+        apply: (player, tier) => {
+          player.bulletSpeed *= 2;
+        },
+      },
+      {
+        title: "Health Quick",
+        desc: "ריפוי מיידי 50%",
+        tier: UPGRADE_TIERS[0],
+        apply: (player, tier) => {
+          player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.5);
+        },
+      },
     {
       title: "Rapid Cannon",
       desc: "יורה מהר יותר ב־20%",
-      apply: (player) => {
+      tier: UPGRADE_TIERS[0], // ירוק
+      apply: (player, tier) => {
         player.fireRate *= 0.8;
+        player.bulletDamage *= tier.power;
+        player.maxHp = Math.floor(player.maxHp * tier.health);
       },
     },
     {
       title: "Twin Cannons",
       desc: "+2 קליעים לכל ירייה",
-      apply: (player) => {
+      tier: UPGRADE_TIERS[1], // כחול
+      apply: (player, tier) => {
         player.shotCount = Math.min(player.shotCount + 2, 12);
+        player.bulletDamage *= tier.power;
+        player.maxHp = Math.floor(player.maxHp * tier.health);
       },
     },
     {
       title: "Armor Plating",
       desc: "+45 חיים מקסימליים וריפוי חזק",
-      apply: (player) => {
+      tier: UPGRADE_TIERS[2], // סגול
+      apply: (player, tier) => {
         player.maxHp += 45;
         player.hp = Math.min(player.maxHp, player.hp + 80);
+        player.bulletDamage *= tier.power;
+        player.maxHp = Math.floor(player.maxHp * tier.health);
       },
     },
     {
       title: "High Caliber",
       desc: "נזק קליעים +35%",
-      apply: (player) => {
+      tier: UPGRADE_TIERS[3], // אדום
+      apply: (player, tier) => {
         player.bulletDamage *= 1.35;
+        player.bulletDamage *= tier.power;
+        player.maxHp = Math.floor(player.maxHp * tier.health);
       },
     },
     {
       title: "Ion Engines",
       desc: "מהירות תנועה +20%",
-      apply: (player) => {
+      tier: UPGRADE_TIERS[4], // אגדי
+      apply: (player, tier) => {
         player.speed *= 1.2;
+        player.bulletDamage *= tier.power;
+        player.maxHp = Math.floor(player.maxHp * tier.health);
       },
     },
     {
@@ -299,11 +654,15 @@ if (arenaDom.canvas) {
     },
   ];
 
+  const initialPlaneProgress = loadPlaneProgress();
+
   const state = {
     running: true,
     stage: 1,
     score: 0,
+    coins: initialPlaneProgress.coins,
     stars: [],
+    skyTraffic: [],
     planets: [],
     enemies: [],
     bullets: [],
@@ -319,7 +678,14 @@ if (arenaDom.canvas) {
     boss: null,
     bossContactTick: 0,
     bossLaserTick: 0,
+    planes: buildPlaneCatalog(),
+    creatorMode: initialPlaneProgress.creatorMode,
+    unlockedPlaneCount: initialPlaneProgress.unlockedPlaneCount,
+    activePlaneId: initialPlaneProgress.activePlaneId,
+    servants: [],
     availableUpgrades: [],
+    upgradeAutoPickTimer: null,
+    musicEnabled: false,
     player: {
       x: WIDTH / 2,
       y: HEIGHT * 0.8,
@@ -350,6 +716,90 @@ if (arenaDom.canvas) {
   };
 
   let lastTime = performance.now();
+  let musicContext = null;
+  let musicMasterGain = null;
+  let musicNodes = null;
+  let musicSequencerTimer = null;
+  let musicStep = 0;
+  let musicAudio = null;
+  let musicRotateTimer = null;
+  let musicUsingSynthFallback = false;
+  let realMusicErrorCount = 0;
+  const resolvedTrackUrlCache = new Map();
+  let sfxContext = null;
+  let sfxMasterGain = null;
+  let lastPlayerShotSfx = 0;
+  const REAL_MUSIC_PLAYLIST = [
+    "https://pixabay.com/music/electronic-retro-arcade-game-music-487316/",
+    "https://pixabay.com/music/video-games-game-gaming-video-game-music-471936/",
+    "https://pixabay.com/music/video-games-gaming-game-video-game-music-474671/",
+    "https://pixabay.com/music/video-games-chiptune-video-game-games-music-457939/",
+    "https://pixabay.com/music/upbeat-retro-arcade-game-music-297305/",
+    "https://pixabay.com/music/upbeat-game-minecraft-gaming-background-music-402451/",
+  ];
+
+  function showUpgradeSelection(upgrades) {
+    state.running = false;
+    hideOverlay();
+    if (state.upgradeAutoPickTimer) {
+      clearTimeout(state.upgradeAutoPickTimer);
+      state.upgradeAutoPickTimer = null;
+    }
+    state.availableUpgrades = upgrades;
+    arenaDom.upgradeText.textContent = `שלב ${state.stage} הושלם — בחר שדרוג אחד מתוך ${UPGRADE_OPTIONS_PER_STAGE}`;
+
+    const buttons = [arenaDom.upg1, arenaDom.upg2, arenaDom.upg3, arenaDom.upg4, arenaDom.upg5, arenaDom.upg6];
+    buttons.forEach((button, index) => {
+      const option = upgrades[index];
+      if (!button) {
+        return;
+      }
+
+      if (!option) {
+        button.classList.add("hidden");
+        return;
+      }
+
+      button.classList.remove("hidden");
+      button.textContent = `${option.title} — ${option.desc} [${option.tier.name}]`;
+      if (option.tier.name === "קשת") {
+        button.style.background = "linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet)";
+        button.style.color = "#fff";
+      } else {
+        button.style.background = option.tier.color;
+        button.style.color = "#fff";
+      }
+      button.classList.add("upgrade-btn");
+    });
+
+    arenaDom.upgrade.classList.remove("hidden");
+
+    state.upgradeAutoPickTimer = setTimeout(() => {
+      if (state.running || arenaDom.upgrade.classList.contains("hidden")) {
+        return;
+      }
+
+      const availableSlots = state.availableUpgrades
+        .map((upgrade, index) => (upgrade ? index : -1))
+        .filter((index) => index >= 0);
+
+      if (availableSlots.length === 0) {
+        startNextStage();
+        return;
+      }
+
+      const randomSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
+      chooseUpgrade(randomSlot);
+    }, 10000);
+  }
+
+  function hideUpgradeSelection() {
+    if (state.upgradeAutoPickTimer) {
+      clearTimeout(state.upgradeAutoPickTimer);
+      state.upgradeAutoPickTimer = null;
+    }
+    arenaDom.upgrade.classList.add("hidden");
+  }
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -364,11 +814,244 @@ if (arenaDom.canvas) {
     return Math.hypot(ax - bx, ay - by);
   }
 
+  function readGamepadInput() {
+    gamepadInput.moveX = 0;
+    gamepadInput.moveY = 0;
+
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    const pad = Array.from(pads || []).find((item) => item && item.connected);
+    if (!pad) {
+      gamepadInput.dashPressed = false;
+      gamepadInput.pulsePressed = false;
+      return;
+    }
+
+    const deadzone = 0.18;
+    const axisX = pad.axes[0] || 0;
+    const axisY = pad.axes[1] || 0;
+    gamepadInput.moveX = Math.abs(axisX) > deadzone ? axisX : 0;
+    gamepadInput.moveY = Math.abs(axisY) > deadzone ? axisY : 0;
+
+    const dashNow = Boolean(pad.buttons[1]?.pressed || pad.buttons[5]?.pressed);
+    const pulseNow = Boolean(pad.buttons[0]?.pressed || pad.buttons[4]?.pressed);
+
+    if (dashNow && !gamepadInput.dashPressed) {
+      triggerDash();
+    }
+    if (pulseNow && !gamepadInput.pulsePressed) {
+      triggerPulse();
+    }
+
+    gamepadInput.dashPressed = dashNow;
+    gamepadInput.pulsePressed = pulseNow;
+  }
+
   function setAimVector(x, y) {
     const length = Math.hypot(x, y) || 1;
     aim.x = x / length;
     aim.y = y / length;
     aim.angle = Math.atan2(aim.y, aim.x);
+  }
+
+  function getSmallServantCount() {
+    return Math.min(10, Math.max(0, Math.floor(state.activePlaneId / 10)));
+  }
+
+  function getBigServantCount() {
+    return Math.min(10, Math.max(0, Math.floor(state.activePlaneId / 100)));
+  }
+
+  function getServantCount() {
+    return getSmallServantCount() + getBigServantCount();
+  }
+
+  function getServantMaxHp(servant) {
+    if (servant?.isBig) {
+      return Math.max(30, state.player.maxHp * 3);
+    }
+    return Math.max(20, state.player.maxHp * 0.5);
+  }
+
+  function syncServantFleet() {
+    const targetCount = getServantCount();
+    const smallServantCount = getSmallServantCount();
+    const bigServantCount = getBigServantCount();
+
+    if (state.servants.length > targetCount) {
+      state.servants = state.servants.slice(0, targetCount);
+    }
+
+    while (state.servants.length < targetCount) {
+      state.servants.push({
+        hp: 1,
+        maxHp: 1,
+        alive: true,
+        respawnTimer: 0,
+        fireCooldown: 0,
+        burstShotsLeft: 0,
+        burstDelay: 0,
+        isBig: false,
+      });
+    }
+
+    state.servants.forEach((servant, index) => {
+      servant.isBig = index >= smallServantCount && index < smallServantCount + bigServantCount;
+      servant.maxHp = getServantMaxHp(servant);
+      if (servant.alive) {
+        servant.hp = Math.min(servant.hp, servant.maxHp);
+      }
+    });
+  }
+
+  function killServant(servant) {
+    if (!servant.alive) return;
+    servant.alive = false;
+    servant.hp = 0;
+    servant.respawnTimer = SERVANT_RESPAWN_MS;
+    servant.fireCooldown = 0;
+    servant.burstShotsLeft = 0;
+    servant.burstDelay = 0;
+  }
+
+  function damageServant(servant, amount) {
+    if (!servant || !servant.alive) return;
+    servant.hp -= amount;
+    if (servant.hp <= 0) {
+      killServant(servant);
+    }
+  }
+
+  function getServantOrbitPoint(index, total, now = performance.now()) {
+    const player = state.player;
+    const servantState = state.servants[index];
+    const safeTotal = Math.max(1, total);
+
+    if (!servantState) {
+      const fallbackAngle = now * 0.0024 + (Math.PI * 2 * index) / safeTotal;
+      const fallbackRadius = 140;
+      return {
+        x: player.x + Math.cos(fallbackAngle) * fallbackRadius,
+        y: player.y + Math.sin(fallbackAngle) * fallbackRadius,
+        angle: fallbackAngle,
+      };
+    }
+
+    let orbitAngle;
+    let orbitRadius;
+
+    if (servantState.isBig) {
+      const bigIndices = state.servants
+        .map((servant, servantIndex) => ({ servant, servantIndex }))
+        .filter(({ servant }) => servant.isBig)
+        .map(({ servantIndex }) => servantIndex);
+      const bigCount = Math.max(1, bigIndices.length);
+      const bigOrder = Math.max(0, bigIndices.indexOf(index));
+      const orbitBase = 175;
+      const orbitWave = 18;
+      orbitRadius = orbitBase + Math.sin(now * 0.0018 + bigOrder * 0.7) * orbitWave;
+      orbitAngle = now * 0.0019 + (Math.PI * 2 * bigOrder) / bigCount;
+    } else {
+      const smallIndices = state.servants
+        .map((servant, servantIndex) => ({ servant, servantIndex }))
+        .filter(({ servant }) => !servant.isBig)
+        .map(({ servantIndex }) => servantIndex);
+      const smallCount = Math.max(1, smallIndices.length);
+      const smallOrder = Math.max(0, smallIndices.indexOf(index));
+      const wobble = Math.sin(now * 0.0016 + smallOrder * 0.45) * 0.06;
+      orbitAngle = now * 0.0022 + (Math.PI * 2 * smallOrder) / smallCount + wobble;
+      const orbitBase = 82;
+      const orbitWave = 8;
+      orbitRadius = orbitBase + Math.sin(now * 0.0019 + smallOrder * 0.6) * orbitWave;
+    }
+
+    return {
+      x: player.x + Math.cos(orbitAngle) * orbitRadius,
+      y: player.y + Math.sin(orbitAngle) * orbitRadius,
+      angle: orbitAngle,
+    };
+  }
+
+  function fireServantBullet(index, total, angle, servantState) {
+    const player = state.player;
+    const plane = getActivePlane();
+    const now = performance.now();
+    const servant = getServantOrbitPoint(index, total, now);
+    const damageMultiplier = servantState?.isBig ? 3 : 0.5;
+    const servantDamage = player.bulletDamage * (player.tempPower > 0 ? 1.4 : 1) * plane.damageMult * damageMultiplier;
+    let targetAngle = angle;
+
+    const targets = state.enemies.map((enemy) => ({ x: enemy.x, y: enemy.y }));
+    if (state.boss) {
+      targets.push({ x: state.boss.x, y: state.boss.y });
+    }
+
+    if (targets.length > 0) {
+      let nearest = targets[0];
+      let nearestDistance = Infinity;
+      targets.forEach((target) => {
+        const dist = distance(servant.x, servant.y, target.x, target.y);
+        if (dist < nearestDistance) {
+          nearestDistance = dist;
+          nearest = target;
+        }
+      });
+      targetAngle = Math.atan2(nearest.y - servant.y, nearest.x - servant.x);
+    }
+
+    const servantShotCount = servantState?.isBig ? 10 : 1;
+    const servantSpreadArc = servantState?.isBig ? 0.28 : 0;
+    for (let bulletIndex = 0; bulletIndex < servantShotCount; bulletIndex += 1) {
+      const t = servantShotCount === 1 ? 0 : bulletIndex / (servantShotCount - 1) - 0.5;
+      const shotAngle = targetAngle + t * servantSpreadArc;
+      state.bullets.push({
+        x: servant.x,
+        y: servant.y,
+        vx: Math.cos(shotAngle) * player.bulletSpeed,
+        vy: Math.sin(shotAngle) * player.bulletSpeed,
+        life: 72,
+        damage: servantDamage,
+        radius: 2.3,
+      });
+    }
+  }
+
+  function updateServants(dt) {
+    syncServantFleet();
+
+    const servantCount = state.servants.length;
+    const baseAngle = aim.angle;
+
+    state.servants.forEach((servant, index) => {
+      if (servant.alive) {
+        if (servant.fireCooldown > 0) {
+          servant.fireCooldown -= dt;
+        }
+
+        if (servant.burstDelay > 0) {
+          servant.burstDelay -= dt;
+        }
+
+        if (state.running && servant.burstShotsLeft > 0 && servant.burstDelay <= 0) {
+          const servantAngle = baseAngle + (index - (servantCount - 1) / 2) * 0.01;
+          fireServantBullet(index, servantCount, servantAngle, servant);
+          servant.burstShotsLeft -= 1;
+          if (servant.burstShotsLeft > 0) {
+            servant.burstDelay = SERVANT_BURST_INTERVAL_MS;
+          }
+        }
+        return;
+      }
+
+      servant.respawnTimer -= dt;
+      if (servant.respawnTimer <= 0) {
+        servant.alive = true;
+        servant.maxHp = getServantMaxHp(servant);
+        servant.hp = servant.maxHp;
+        servant.fireCooldown = 0;
+        servant.burstShotsLeft = 0;
+        servant.burstDelay = 0;
+      }
+    });
   }
 
   function updateAutoAim() {
@@ -412,6 +1095,409 @@ if (arenaDom.canvas) {
     }
   }
 
+  function initSkyTraffic() {
+    state.skyTraffic = [];
+    for (let i = 0; i < 22; i += 1) {
+      state.skyTraffic.push({
+        x: Math.random() * (WIDTH + 220) - 110,
+        y: Math.random() * (HEIGHT * 0.7),
+        speed: 0.6 + Math.random() * 2.2,
+        size: 6 + Math.random() * 16,
+        alpha: 0.08 + Math.random() * 0.2,
+        hueShift: Math.random() * 60,
+      });
+    }
+  }
+
+  function updateSkyTraffic(dtFactor) {
+    state.skyTraffic.forEach((craft) => {
+      craft.x -= craft.speed * dtFactor;
+      if (craft.x < -140) {
+        craft.x = WIDTH + 140 + Math.random() * 160;
+        craft.y = Math.random() * (HEIGHT * 0.72);
+      }
+    });
+  }
+
+  function setMusicButtonLabel() {
+    if (!arenaDom.musicBtn) return;
+    arenaDom.musicBtn.textContent = state.musicEnabled ? "♪ מוזיקה: פועל" : "♪ מוזיקה: כבוי";
+  }
+
+  function pickRandomTrackIndex(excludeCurrent = true) {
+    if (REAL_MUSIC_PLAYLIST.length <= 1) return 0;
+    let next = Math.floor(Math.random() * REAL_MUSIC_PLAYLIST.length);
+    if (excludeCurrent) {
+      let guard = 0;
+      while (next === musicStep && guard < 10) {
+        next = Math.floor(Math.random() * REAL_MUSIC_PLAYLIST.length);
+        guard += 1;
+      }
+    }
+    return next;
+  }
+
+  async function resolvePlayableTrackSource(trackUrl) {
+    if (!trackUrl) return null;
+    if (/\.mp3(\?|$)/i.test(trackUrl)) {
+      return trackUrl;
+    }
+
+    if (resolvedTrackUrlCache.has(trackUrl)) {
+      return resolvedTrackUrlCache.get(trackUrl);
+    }
+
+    if (trackUrl.includes("pixabay.com/music/")) {
+      try {
+        const response = await fetch(trackUrl);
+        const html = await response.text();
+        const normalizedHtml = html.replace(/\\\//g, "/");
+        const match = normalizedHtml.match(/https?:\/\/cdn\.pixabay\.com\/download\/audio\/[^"'\s]+?\.mp3[^"'\s]*/i);
+        if (match && match[0]) {
+          const resolved = match[0].replace(/&amp;/g, "&");
+          resolvedTrackUrlCache.set(trackUrl, resolved);
+          return resolved;
+        }
+      } catch (error) {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  async function playNextRealTrack(excludeCurrent = true) {
+    if (!musicAudio) return;
+    musicStep = pickRandomTrackIndex(excludeCurrent);
+    const trackUrl = REAL_MUSIC_PLAYLIST[musicStep];
+    const playable = await resolvePlayableTrackSource(trackUrl);
+    if (!playable) {
+      realMusicErrorCount += 1;
+      if (realMusicErrorCount >= REAL_MUSIC_PLAYLIST.length + 1) {
+        await enableSynthMusicFallback();
+      }
+      return;
+    }
+    musicAudio.src = playable;
+    if (state.musicEnabled) {
+      const playPromise = musicAudio.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(async () => {
+          realMusicErrorCount += 1;
+          if (realMusicErrorCount >= REAL_MUSIC_PLAYLIST.length + 1) {
+            await enableSynthMusicFallback();
+          }
+        });
+      }
+    }
+  }
+
+  async function enableSynthMusicFallback() {
+    if (musicUsingSynthFallback) return;
+    await setupSpaceMusic();
+    if (!musicContext) return;
+    musicUsingSynthFallback = true;
+    await musicContext.resume();
+    startMusicSequencer();
+  }
+
+  async function disableSynthMusicFallback() {
+    if (!musicUsingSynthFallback) return;
+    stopMusicSequencer();
+    if (musicContext) {
+      await musicContext.suspend();
+    }
+    musicUsingSynthFallback = false;
+  }
+
+  function startMusicRotation() {
+    if (musicRotateTimer) return;
+    musicRotateTimer = setInterval(() => {
+      if (!state.musicEnabled) return;
+      void playNextRealTrack(true);
+    }, 65000);
+  }
+
+  function stopMusicRotation() {
+    if (!musicRotateTimer) return;
+    clearInterval(musicRotateTimer);
+    musicRotateTimer = null;
+  }
+
+  function setupRealMusicPlayer() {
+    if (musicAudio) {
+      return;
+    }
+
+    musicStep = pickRandomTrackIndex(false);
+    musicAudio = new Audio();
+    musicAudio.preload = "auto";
+    musicAudio.crossOrigin = "anonymous";
+    musicAudio.volume = 0.72;
+    musicAudio.addEventListener("ended", () => {
+      realMusicErrorCount = 0;
+      void playNextRealTrack(true);
+    });
+    musicAudio.addEventListener("canplay", () => {
+      realMusicErrorCount = 0;
+      void disableSynthMusicFallback();
+    });
+    musicAudio.addEventListener("playing", () => {
+      realMusicErrorCount = 0;
+      void disableSynthMusicFallback();
+    });
+    musicAudio.addEventListener("error", async () => {
+      realMusicErrorCount += 1;
+      if (realMusicErrorCount >= REAL_MUSIC_PLAYLIST.length + 1) {
+        await enableSynthMusicFallback();
+        return;
+      }
+      void playNextRealTrack(true);
+    });
+  }
+
+  async function setupSpaceMusic() {
+    if (musicContext) return;
+
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return;
+
+    musicContext = new AudioContextCtor();
+    musicMasterGain = musicContext.createGain();
+    musicMasterGain.gain.value = 0.24;
+    musicMasterGain.connect(musicContext.destination);
+
+    const engineOsc = musicContext.createOscillator();
+    engineOsc.type = "sawtooth";
+    engineOsc.frequency.value = 54;
+    const engineFilter = musicContext.createBiquadFilter();
+    engineFilter.type = "lowpass";
+    engineFilter.frequency.value = 240;
+    const engineGain = musicContext.createGain();
+    engineGain.gain.value = 0.04;
+
+    const padOscA = musicContext.createOscillator();
+    padOscA.type = "triangle";
+    padOscA.frequency.value = 164.81;
+    const padOscB = musicContext.createOscillator();
+    padOscB.type = "sine";
+    padOscB.frequency.value = 246.94;
+    const padFilter = musicContext.createBiquadFilter();
+    padFilter.type = "lowpass";
+    padFilter.frequency.value = 680;
+    const padGain = musicContext.createGain();
+    padGain.gain.value = 0.03;
+
+    const leadOsc = musicContext.createOscillator();
+    leadOsc.type = "square";
+    leadOsc.frequency.value = 329.63;
+    const leadFilter = musicContext.createBiquadFilter();
+    leadFilter.type = "bandpass";
+    leadFilter.frequency.value = 980;
+    const leadGain = musicContext.createGain();
+    leadGain.gain.value = 0.02;
+
+    const rumbleOsc = musicContext.createOscillator();
+    rumbleOsc.type = "triangle";
+    rumbleOsc.frequency.value = 41.2;
+    const rumbleFilter = musicContext.createBiquadFilter();
+    rumbleFilter.type = "lowpass";
+    rumbleFilter.frequency.value = 170;
+    const rumbleGain = musicContext.createGain();
+    rumbleGain.gain.value = 0.02;
+
+    const lfo = musicContext.createOscillator();
+    lfo.type = "sine";
+    lfo.frequency.value = 0.07;
+    const lfoGain = musicContext.createGain();
+    lfoGain.gain.value = 0.025;
+
+    lfo.connect(lfoGain);
+    lfoGain.connect(padGain.gain);
+
+    engineOsc.connect(engineFilter);
+    engineFilter.connect(engineGain);
+    engineGain.connect(musicMasterGain);
+
+    padOscA.connect(padFilter);
+    padOscB.connect(padFilter);
+    padFilter.connect(padGain);
+    padGain.connect(musicMasterGain);
+
+    leadOsc.connect(leadFilter);
+    leadFilter.connect(leadGain);
+    leadGain.connect(musicMasterGain);
+
+    rumbleOsc.connect(rumbleFilter);
+    rumbleFilter.connect(rumbleGain);
+    rumbleGain.connect(musicMasterGain);
+
+    engineOsc.start();
+    padOscA.start();
+    padOscB.start();
+    leadOsc.start();
+    rumbleOsc.start();
+    lfo.start();
+
+    musicNodes = {
+      engineOsc,
+      padOscA,
+      padOscB,
+      leadOsc,
+      rumbleOsc,
+      lfo,
+      engineFilter,
+      padFilter,
+      leadFilter,
+      rumbleFilter,
+      engineGain,
+      padGain,
+      leadGain,
+      rumbleGain,
+    };
+  }
+
+  function startMusicSequencer() {
+    if (!musicContext || !musicNodes || musicSequencerTimer) return;
+
+    const progression = [
+      [92.5, 138.59, 185],
+      [98, 146.83, 196],
+      [110, 164.81, 220],
+      [123.47, 185, 246.94],
+    ];
+    const bossProgression = [
+      [87.31, 130.81, 196],
+      [98, 146.83, 220],
+      [110, 174.61, 246.94],
+      [123.47, 185, 277.18],
+    ];
+    const leadLine = [293.66, 349.23, 392, 440, 392, 349.23, 329.63, 261.63];
+    const leadBossLine = [392, 440, 523.25, 587.33, 659.25, 587.33, 523.25, 440];
+
+    musicSequencerTimer = setInterval(() => {
+      if (!state.musicEnabled || !musicNodes || !musicContext) {
+        return;
+      }
+
+      const isBossMoment = state.isBossStage;
+      const stageIntensity = clamp((state.stage - 1) / 40, 0, 1);
+      const chordSet = isBossMoment ? bossProgression : progression;
+      const chord = chordSet[musicStep % chordSet.length];
+      const t = musicContext.currentTime;
+
+      musicNodes.engineOsc.frequency.setTargetAtTime(chord[0] * (0.46 + stageIntensity * 0.11), t, 0.08);
+      musicNodes.padOscA.frequency.setTargetAtTime(chord[1], t, 0.14);
+      musicNodes.padOscB.frequency.setTargetAtTime(chord[2], t, 0.16);
+      const leadSet = isBossMoment ? leadBossLine : leadLine;
+      const leadFreq = leadSet[musicStep % leadSet.length];
+      musicNodes.leadOsc.frequency.setTargetAtTime(leadFreq, t, 0.06);
+
+      musicNodes.engineFilter.frequency.setTargetAtTime(230 + (musicStep % 4) * 95 + stageIntensity * 120, t, 0.1);
+      musicNodes.padFilter.frequency.setTargetAtTime(640 + (musicStep % 4) * 140 + stageIntensity * 160, t, 0.12);
+      musicNodes.leadFilter.frequency.setTargetAtTime((isBossMoment ? 1350 : 980) + (musicStep % 3) * 120, t, 0.09);
+      musicNodes.rumbleFilter.frequency.setTargetAtTime(180 + stageIntensity * 90 + (isBossMoment ? 80 : 0), t, 0.1);
+
+      const pulse = (musicStep % 2) === 0 ? 0.14 : 0.08;
+      const bossBoost = isBossMoment ? 1.35 : 1;
+      musicNodes.engineGain.gain.setTargetAtTime(pulse * bossBoost, t, 0.03);
+      musicNodes.padGain.gain.setTargetAtTime((0.07 + stageIntensity * 0.02) * bossBoost, t, 0.05);
+      musicNodes.leadGain.gain.setTargetAtTime((0.06 + (musicStep % 4 === 0 ? 0.03 : 0)) * bossBoost, t, 0.04);
+      musicNodes.rumbleGain.gain.setTargetAtTime((0.05 + stageIntensity * 0.04) * bossBoost, t, 0.06);
+      musicMasterGain.gain.setTargetAtTime(0.34 + stageIntensity * 0.06 + (isBossMoment ? 0.07 : 0), t, 0.05);
+
+      musicStep += 1;
+    }, 220);
+  }
+
+  function stopMusicSequencer() {
+    if (!musicSequencerTimer) return;
+    clearInterval(musicSequencerTimer);
+    musicSequencerTimer = null;
+  }
+
+  function setupSfxAudio() {
+    if (sfxContext) return;
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return;
+    sfxContext = new AudioContextCtor();
+    sfxMasterGain = sfxContext.createGain();
+    sfxMasterGain.gain.value = 0.34;
+    sfxMasterGain.connect(sfxContext.destination);
+  }
+
+  function playMainShotSfx(totalShots, rapidFactor) {
+    setupSfxAudio();
+    if (!sfxContext || !sfxMasterGain) return;
+
+    if (sfxContext.state === "suspended") {
+      void sfxContext.resume().catch(() => {});
+    }
+
+    const nowMs = performance.now();
+    if (nowMs - lastPlayerShotSfx < 55) {
+      return;
+    }
+    lastPlayerShotSfx = nowMs;
+
+    const now = sfxContext.currentTime;
+    const toneOsc = sfxContext.createOscillator();
+    toneOsc.type = "square";
+    const tailOsc = sfxContext.createOscillator();
+    tailOsc.type = "triangle";
+
+    const highPass = sfxContext.createBiquadFilter();
+    highPass.type = "highpass";
+    highPass.frequency.value = 520;
+
+    const bodyGain = sfxContext.createGain();
+    const totalFactor = clamp(totalShots / 4, 0.8, 1.8);
+    const rapidBoost = clamp(1.25 - rapidFactor * 0.4, 0.9, 1.25);
+    const peak = 0.13 * totalFactor * rapidBoost;
+    bodyGain.gain.setValueAtTime(0.0001, now);
+    bodyGain.gain.exponentialRampToValueAtTime(peak, now + 0.006);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+
+    toneOsc.frequency.setValueAtTime(960, now);
+    toneOsc.frequency.exponentialRampToValueAtTime(320, now + 0.1);
+    tailOsc.frequency.setValueAtTime(580, now);
+    tailOsc.frequency.exponentialRampToValueAtTime(210, now + 0.12);
+
+    toneOsc.connect(highPass);
+    tailOsc.connect(highPass);
+    highPass.connect(bodyGain);
+    bodyGain.connect(sfxMasterGain);
+
+    toneOsc.start(now);
+    tailOsc.start(now);
+    toneOsc.stop(now + 0.13);
+    tailOsc.stop(now + 0.14);
+  }
+
+  async function setMusicEnabled(enabled) {
+    setupRealMusicPlayer();
+
+    if (enabled) {
+      state.musicEnabled = true;
+      if (musicAudio) {
+        void playNextRealTrack(false);
+      }
+      startMusicRotation();
+    } else {
+      stopMusicRotation();
+      if (musicAudio) {
+        musicAudio.pause();
+      }
+      await disableSynthMusicFallback();
+      state.musicEnabled = false;
+    }
+    setMusicButtonLabel();
+  }
+
+  async function toggleMusic() {
+    await setMusicEnabled(!state.musicEnabled);
+  }
+
   function initPlanetsForStage() {
     state.planets = [];
     for (let i = 0; i < 3; i += 1) {
@@ -435,43 +1521,97 @@ if (arenaDom.canvas) {
     arenaDom.overlay.classList.add("hidden");
   }
 
-  function showUpgradeSelection(upgrades) {
-    state.running = false;
-    state.availableUpgrades = upgrades;
-    arenaDom.upgradeText.textContent = `שלב ${state.stage} הושלם — בחר שדרוג אחד מתוך ${UPGRADE_OPTIONS_PER_STAGE}`;
-
-    const buttons = [arenaDom.upg1, arenaDom.upg2, arenaDom.upg3, arenaDom.upg4, arenaDom.upg5, arenaDom.upg6];
-    buttons.forEach((button, index) => {
-      const option = upgrades[index];
-      if (!button) {
-        return;
-      }
-
-      if (!option) {
-        button.classList.add("hidden");
-        return;
-      }
-
-      button.classList.remove("hidden");
-      button.textContent = `${option.title} — ${option.desc}`;
-    });
-
-    arenaDom.upgrade.classList.remove("hidden");
+  function getActivePlane() {
+    return state.planes[Math.max(0, state.activePlaneId - 1)] || state.planes[0];
   }
 
-  function hideUpgradeSelection() {
-    arenaDom.upgrade.classList.add("hidden");
+  function enforceCreatorModePlanes() {
+    if (!state.creatorMode) return;
+    state.unlockedPlaneCount = MAX_PLANES;
+    state.activePlaneId = clamp(state.activePlaneId || MAX_PLANES, 1, MAX_PLANES);
+  }
+
+  function renderPlaneDock() {
+    if (!arenaDom.planeList || !arenaDom.planeActive) return;
+
+    const activePlane = getActivePlane();
+    const nextUnlock = Math.min(MAX_PLANES, state.unlockedPlaneCount + 1);
+    arenaDom.planeActive.textContent = `מטוס פעיל: ${activePlane.id} • ${activePlane.title}`;
+
+    const fragment = document.createDocumentFragment();
+    for (let planeId = 1; planeId <= MAX_PLANES; planeId += 1) {
+      const plane = state.planes[planeId - 1];
+      const unlocked = planeId <= state.unlockedPlaneCount;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "plane-item";
+      if (unlocked) {
+        button.classList.add("unlocked");
+      }
+      if (planeId === state.activePlaneId) {
+        button.classList.add("active");
+      }
+      button.dataset.planeId = String(planeId);
+      if (unlocked) {
+        button.textContent = `#${planeId} ${plane.title}`;
+        button.disabled = false;
+      } else {
+        button.textContent = `🔒 #${planeId} | מחיר: ${planeId}🪙`;
+        const canBuyNow = state.creatorMode || planeId === nextUnlock;
+        button.disabled = !canBuyNow;
+      }
+      fragment.appendChild(button);
+    }
+
+    arenaDom.planeList.innerHTML = "";
+    arenaDom.planeList.appendChild(fragment);
+
+    const activeButton = arenaDom.planeList.querySelector(".plane-item.active");
+    if (activeButton) {
+      activeButton.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  }
+
+  function syncPlaneUnlocks() {
+    enforceCreatorModePlanes();
+    if (state.creatorMode) {
+      renderPlaneDock();
+      return null;
+    }
+
+    if (state.activePlaneId > state.unlockedPlaneCount) {
+      state.activePlaneId = state.unlockedPlaneCount;
+      savePlaneProgress();
+      renderPlaneDock();
+    }
+
+    return null;
+  }
+
+  function applyPlaneStartingLoadout() {
+    const player = state.player;
+    const plane = getActivePlane();
+
+    player.hp = Math.min(player.maxHp, player.hp + plane.startHpBonus);
+    player.shieldLayers = Math.max(player.shieldLayers, plane.startShieldLayers);
+    player.tempRapid = Math.max(player.tempRapid, plane.startRapidMs);
+    player.tempSpread = Math.max(player.tempSpread, plane.startSpreadMs);
+    player.tempPower = Math.max(player.tempPower, plane.startPowerMs);
   }
 
   function updateHud() {
     const player = state.player;
+    const plane = getActivePlane();
 
     arenaDom.score.textContent = Math.floor(state.score);
     arenaDom.health.textContent = Math.max(0, Math.floor(player.hp));
     arenaDom.wave.textContent = state.stage;
+    if (arenaDom.coins) {
+      arenaDom.coins.textContent = `🪙 מטבעות: ${Math.floor(state.coins)}`;
+    }
 
     const spreadBonus = player.tempSpread > 0 ? " +Spread" : "";
-    arenaDom.weapon.textContent = `Plane Cannon x${player.shotCount}${spreadBonus}`;
+    arenaDom.weapon.textContent = `P${plane.id} • Cannon x${player.shotCount + plane.shotBonus}${spreadBonus}`;
     arenaDom.dash.textContent = player.dashCooldown <= 0 ? "Ready" : `${(player.dashCooldown / 1000).toFixed(1)}s`;
     arenaDom.pulse.textContent = player.pulseCooldown <= 0 ? "Ready" : `${(player.pulseCooldown / 1000).toFixed(1)}s`;
   }
@@ -482,25 +1622,28 @@ if (arenaDom.canvas) {
 
   function getEnemyStageScaling(stage) {
     const stageProgress = Math.max(0, stage - 1);
+    const stageMultiplier = 1.1 ** stageProgress;
+    const smallEnemyDamageMultiplier = 0.35;
     return {
-      hp: 1 + stageProgress * 0.4,
-      speed: Math.min(1.22, 1 + stageProgress * 0.02),
-      damage: 1 + stageProgress * 0.28,
+      hp: stageMultiplier,
+      speed: 1,
+      damage: stageMultiplier * smallEnemyDamageMultiplier,
       fireCooldown: 1,
-      contactDamage: (18 + stage * 1.3) * (1 + stageProgress * 0.18),
+      contactDamage: (18 + stage * 1.3) * stageMultiplier * smallEnemyDamageMultiplier,
     };
   }
 
   function getBossStageScaling(stage, bossTier) {
-    const stageProgress = Math.max(0, stage - 1);
     const tierProgress = Math.max(0, bossTier - 1);
+    const hpMultiplier = 3 ** tierProgress;
+    const damageMultiplier = 2 ** tierProgress;
     return {
-      hp: 1.5 + stageProgress * 0.55 + tierProgress * 1.0,
-      damage: 1.3 + stageProgress * 0.32 + tierProgress * 0.55,
+      hp: hpMultiplier,
+      damage: damageMultiplier,
       fireRate: 1,
       bulletSpeed: 1,
-      contactDamage: (34 + stage * 1.8) * (1 + stageProgress * 0.16 + tierProgress * 0.35),
-      laserDamage: (16 + stage * 1.4) * (1 + stageProgress * 0.14 + tierProgress * 0.28),
+      contactDamage: 34 * damageMultiplier,
+      laserDamage: 16 * damageMultiplier,
     };
   }
 
@@ -521,16 +1664,15 @@ if (arenaDom.canvas) {
     const variant = getBossVariantForStage(state.stage);
     const bossTier = getBossTier(state.stage);
     const scaling = getBossStageScaling(state.stage, bossTier);
-    const tierHpBoost = 1 + (bossTier - 1) * 0.28;
-    const hp = (variant.baseHp + state.stage * variant.hpScale) * tierHpBoost * scaling.hp;
+    const hp = variant.baseHp * scaling.hp;
     state.boss = {
       x: WIDTH / 2,
       y: 92,
       radius: variant.radius,
       variant,
       tier: bossTier,
-      damageScale: (1 + (bossTier - 1) * 0.24) * scaling.damage,
-      fireRateScale: Math.max(0.25, Math.max(0.5, 1 - (bossTier - 1) * 0.08) * scaling.fireRate),
+      damageScale: scaling.damage,
+      fireRateScale: scaling.fireRate,
       bulletSpeedScale: scaling.bulletSpeed,
       contactDamage: scaling.contactDamage,
       laserTickDamage: scaling.laserDamage,
@@ -578,6 +1720,10 @@ if (arenaDom.canvas) {
     state.particles = [];
     state.pickups = [];
     state.availableUpgrades = [];
+    state.servants = [];
+    enforceCreatorModePlanes();
+    state.unlockedPlaneCount = state.creatorMode ? MAX_PLANES : clamp(state.unlockedPlaneCount, 1, MAX_PLANES);
+    state.activePlaneId = clamp(state.activePlaneId, 1, state.unlockedPlaneCount);
 
     const player = state.player;
     player.x = WIDTH / 2;
@@ -604,12 +1750,16 @@ if (arenaDom.canvas) {
     player.tempRapid = 0;
     player.tempSpread = 0;
     player.tempPower = 0;
+    applyPlaneStartingLoadout();
 
     initStars();
+    initSkyTraffic();
     initPlanetsForStage();
     resetStageProgress();
     hideOverlay();
     hideUpgradeSelection();
+    renderPlaneDock();
+    savePlaneProgress();
     updateHud();
   }
 
@@ -627,7 +1777,7 @@ if (arenaDom.canvas) {
     const seed = Math.random() * 9999;
     const scaling = getEnemyStageScaling(state.stage);
     const hp = type.hp(state.stage) * scaling.hp;
-    const speed = type.speed(state.stage) * scaling.speed;
+    const speed = type.speed(1) * scaling.speed;
 
     state.enemies.push({
       type: typeKey,
@@ -681,9 +1831,10 @@ if (arenaDom.canvas) {
   function firePlayer() {
     const player = state.player;
     if (!state.running || player.fireCooldown > 0) return;
+    const plane = getActivePlane();
 
-    const rapidFactor = player.tempRapid > 0 ? 0.62 : 1;
-    const shotCount = player.shotCount + (player.tempSpread > 0 ? 2 : 0);
+    const rapidFactor = (player.tempRapid > 0 ? 0.62 : 1) * plane.fireRateMult;
+    const shotCount = player.shotCount + plane.shotBonus + (player.tempSpread > 0 ? 2 : 0);
     const total = clamp(shotCount, 1, 10);
     const baseAngle = aim.angle;
     const spreadArc = player.spread + (player.tempSpread > 0 ? 0.12 : 0);
@@ -697,9 +1848,27 @@ if (arenaDom.canvas) {
         vx: Math.cos(angle) * player.bulletSpeed,
         vy: Math.sin(angle) * player.bulletSpeed,
         life: 80,
-        damage: player.bulletDamage * (player.tempPower > 0 ? 1.4 : 1),
+        damage: player.bulletDamage * (player.tempPower > 0 ? 1.4 : 1) * plane.damageMult,
         radius: 3.3,
       });
+    }
+
+    playMainShotSfx(total, rapidFactor);
+
+    const servantCount = state.servants.length;
+    if (servantCount > 0) {
+      for (let index = 0; index < servantCount; index += 1) {
+        const servantState = state.servants[index];
+        if (!servantState || !servantState.alive || servantState.fireCooldown > 0) {
+          continue;
+        }
+
+        const servantAngle = baseAngle + (index - (servantCount - 1) / 2) * 0.01;
+        fireServantBullet(index, servantCount, servantAngle, servantState);
+        servantState.burstShotsLeft = SERVANT_BURST_SHOTS - 1;
+        servantState.burstDelay = SERVANT_BURST_INTERVAL_MS;
+        servantState.fireCooldown = player.fireRate * 2;
+      }
     }
 
     player.fireCooldown = player.fireRate * rapidFactor;
@@ -709,39 +1878,43 @@ if (arenaDom.canvas) {
   function triggerDash() {
     const player = state.player;
     if (!state.running || player.dashCooldown > 0) return;
+    const plane = getActivePlane();
 
     const angle = aim.angle;
-    player.x += Math.cos(angle) * player.dashPower * 8;
-    player.y += Math.sin(angle) * player.dashPower * 8;
+    player.x += Math.cos(angle) * player.dashPower * 8 * plane.dashMult;
+    player.y += Math.sin(angle) * player.dashPower * 8 * plane.dashMult;
     player.x = clamp(player.x, 26, WIDTH - 26);
     player.y = clamp(player.y, 26, HEIGHT - 26);
 
     player.invuln = 250;
-    player.dashCooldown = player.dashCooldownBase;
+    player.dashCooldown = player.dashCooldownBase * plane.dashCooldownMult;
     addParticles(player.x, player.y, "#8de9ff", 20, 3.1);
   }
 
   function triggerPulse() {
     const player = state.player;
     if (!state.running || player.pulseCooldown > 0) return;
+    const plane = getActivePlane();
+    const pulseRadius = player.pulseRadius * plane.pulseRadiusMult;
+    const pulsePower = player.pulsePower * plane.pulsePowerMult;
 
     player.pulseFlash = 150;
     player.pulseCooldown = player.pulseCooldownBase;
 
     state.enemies.forEach((enemy) => {
       const dist = distance(player.x, player.y, enemy.x, enemy.y);
-      if (dist <= player.pulseRadius) {
+      if (dist <= pulseRadius) {
         const pushX = (enemy.x - player.x) / Math.max(1, dist);
         const pushY = (enemy.y - player.y) / Math.max(1, dist);
         enemy.x += pushX * 85;
         enemy.y += pushY * 85;
-        enemy.hp -= player.pulsePower;
+        enemy.hp -= pulsePower;
       }
     });
 
     state.enemyBullets = state.enemyBullets.filter((bullet) => {
       const dist = distance(player.x, player.y, bullet.x, bullet.y);
-      return dist > player.pulseRadius;
+      return dist > pulseRadius;
     });
 
     addParticles(player.x, player.y, "#95a9ff", 34, 3.3);
@@ -753,7 +1926,7 @@ if (arenaDom.canvas) {
     const angleToPlayer = Math.atan2(player.y - enemy.y, player.x - enemy.x);
     const scaling = getEnemyStageScaling(state.stage);
     const damageScale = scaling.damage;
-    const speedScale = Math.min(1.18, 1 + Math.max(0, state.stage - 1) * 0.008);
+    const speedScale = 1;
 
     if (type === "scout") {
       state.enemyBullets.push({
@@ -959,7 +2132,7 @@ if (arenaDom.canvas) {
       if (boss.jumpCooldown <= 0) {
         boss.x = 120 + Math.random() * (WIDTH - 240);
         boss.y = 76 + Math.random() * 90;
-        boss.jumpCooldown = Math.max(1000, 1700 - state.stage * 16);
+        boss.jumpCooldown = 1700;
         addParticles(boss.x, boss.y, "#ebccff", 20, 2.5);
       }
     }
@@ -967,16 +2140,14 @@ if (arenaDom.canvas) {
     boss.burstCooldown -= dt;
     if (boss.burstCooldown <= 0) {
       fireBossBurst(boss);
-      const baseCooldown =
-        boss.variant.id === "seraph" ? Math.max(420, 760 - state.stage * 12) : Math.max(560, 980 - state.stage * 18);
+      const baseCooldown = boss.variant.id === "seraph" ? 760 : 980;
       boss.burstCooldown = baseCooldown * boss.fireRateScale;
     }
 
     boss.missileCooldown -= dt;
     if (boss.missileCooldown <= 0) {
       fireBossMissile(boss);
-      const baseCooldown =
-        boss.variant.id === "wraith" ? Math.max(640, 1180 - state.stage * 18) : Math.max(760, 1400 - state.stage * 24);
+      const baseCooldown = boss.variant.id === "wraith" ? 1180 : 1400;
       boss.missileCooldown = baseCooldown * boss.fireRateScale;
     }
 
@@ -1001,7 +2172,7 @@ if (arenaDom.canvas) {
 
     if (boss.laser.mode === "fire" && boss.laser.timer <= 0) {
       boss.laser.mode = "idle";
-      boss.laser.timer = boss.variant.id === "wraith" ? Math.max(1000, 1800 - state.stage * 24) : Math.max(1500, 2500 - state.stage * 40);
+      boss.laser.timer = boss.variant.id === "wraith" ? 1800 : 2500;
     }
   }
 
@@ -1038,43 +2209,26 @@ if (arenaDom.canvas) {
     }
   }
 
+  // פונקציה חדשה: בוחר tier לפי סיכוי
+  function pickUpgradeTier() {
+    const rand = Math.random();
+    let acc = 0;
+    for (const tier of UPGRADE_TIERS) {
+      acc += tier.chance;
+      if (rand < acc) return tier;
+    }
+    return UPGRADE_TIERS[0];
+  }
+
   function buildUpgradeOptions() {
     const pool = [...UPGRADE_POOL];
     const picks = [];
-
-    const boostPick = state.stage >= 6 && Math.random() < 0.8;
-
-    if (boostPick) {
-      const strongCandidates = pool.filter((upgrade) =>
-        ["Final Form", "Storm Barrage", "Titan Core", "Fortress Hull", "Hyper Overdrive"].includes(upgrade.title)
-      );
-
-      if (strongCandidates.length > 0) {
-        const selectedStrong = strongCandidates[Math.floor(Math.random() * strongCandidates.length)];
-        picks.push(selectedStrong);
-        pool.splice(pool.indexOf(selectedStrong), 1);
-      }
-    }
-
-    if (state.stage >= 10) {
-      const extraStrong = pool.filter((upgrade) =>
-        ["Final Form", "Storm Barrage", "Titan Core", "Fortress Hull", "Hyper Overdrive", "Shock Pulse"].includes(
-          upgrade.title
-        )
-      );
-
-      if (extraStrong.length > 0 && picks.length < UPGRADE_OPTIONS_PER_STAGE) {
-        const chosen = extraStrong[Math.floor(Math.random() * extraStrong.length)];
-        picks.push(chosen);
-        pool.splice(pool.indexOf(chosen), 1);
-      }
-    }
-
     while (picks.length < UPGRADE_OPTIONS_PER_STAGE && pool.length > 0) {
       const index = Math.floor(Math.random() * pool.length);
-      picks.push(pool.splice(index, 1)[0]);
+      const upgrade = pool.splice(index, 1)[0];
+      const tier = pickUpgradeTier();
+      picks.push({ ...upgrade, tier });
     }
-
     return picks;
   }
 
@@ -1084,6 +2238,8 @@ if (arenaDom.canvas) {
     hideUpgradeSelection();
     initPlanetsForStage();
     resetStageProgress();
+    applyPlaneStartingLoadout();
+    syncPlaneUnlocks();
     showOverlay(`Stage ${state.stage}`, `נכנסת ל-${getTheme().name}`);
     setTimeout(() => {
       hideOverlay();
@@ -1099,6 +2255,7 @@ if (arenaDom.canvas) {
 
   function playerTakeDamage(amount) {
     const player = state.player;
+    const plane = getActivePlane();
     if (player.invuln > 0 || !state.running) return;
 
     if (player.shieldLayers > 0) {
@@ -1108,7 +2265,7 @@ if (arenaDom.canvas) {
       return;
     }
 
-    player.hp -= amount;
+    player.hp -= amount * (1 - plane.damageReduction);
     player.invuln = 480;
     addParticles(player.x, player.y, "#ff6f88", 18, 2.8);
 
@@ -1121,6 +2278,7 @@ if (arenaDom.canvas) {
   function update(dt) {
     const dtFactor = dt / 16.67;
     const player = state.player;
+    const plane = getActivePlane();
 
     if (player.fireCooldown > 0) player.fireCooldown -= dt;
     if (player.dashCooldown > 0) player.dashCooldown -= dt;
@@ -1131,6 +2289,10 @@ if (arenaDom.canvas) {
     if (player.tempSpread > 0) player.tempSpread -= dt;
     if (player.tempPower > 0) player.tempPower -= dt;
 
+    if (state.running && player.hp > 0) {
+      player.hp = Math.min(player.maxHp, player.hp + plane.regenPerSecond * (dt / 1000));
+    }
+
     state.stars.forEach((star) => {
       star.y += (0.12 + star.depth * 0.24) * dtFactor * (1 + state.stage * 0.02);
       if (star.y > HEIGHT + 4) {
@@ -1138,11 +2300,14 @@ if (arenaDom.canvas) {
         star.x = Math.random() * WIDTH;
       }
     });
+    updateSkyTraffic(dtFactor);
 
     if (!state.running) {
       updateHud();
       return;
     }
+
+    readGamepadInput();
 
     let moveX = 0;
     let moveY = 0;
@@ -1151,11 +2316,25 @@ if (arenaDom.canvas) {
     if (keys.has("a") || keys.has("arrowleft")) moveX -= 1;
     if (keys.has("d") || keys.has("arrowright")) moveX += 1;
 
+    moveX += gamepadInput.moveX;
+    moveY += gamepadInput.moveY;
+
+    if (touchInput.active) {
+      const dx = touchInput.targetX - player.x;
+      const dy = touchInput.targetY - player.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 10) {
+        moveX += dx / dist;
+        moveY += dy / dist;
+      }
+    }
+
     updateAutoAim();
+    updateServants(dt);
 
     const norm = Math.hypot(moveX, moveY) || 1;
-    player.x += (moveX / norm) * player.speed * dtFactor;
-    player.y += (moveY / norm) * player.speed * dtFactor;
+    player.x += (moveX / norm) * player.speed * plane.speedMult * dtFactor;
+    player.y += (moveY / norm) * player.speed * plane.speedMult * dtFactor;
     player.x = clamp(player.x, 24, WIDTH - 24);
     player.y = clamp(player.y, 24, HEIGHT - 24);
 
@@ -1267,6 +2446,7 @@ if (arenaDom.canvas) {
         defeatedThisTick += 1;
         state.stageDefeated += 1;
         state.score += ENEMY_TYPES[enemy.type].score + state.stage * 2;
+        state.coins += 1;
         addParticles(enemy.x, enemy.y, ENEMY_TYPES[enemy.type].color, 16, 2.2);
         spawnPickup(enemy.x, enemy.y);
         return false;
@@ -1280,12 +2460,30 @@ if (arenaDom.canvas) {
 
     if (state.boss && state.boss.hp <= 0) {
       state.score += 650 + state.stage * 40;
+      state.coins += 5;
       addParticles(state.boss.x, state.boss.y, "#ffe099", 48, 3.5);
       state.boss = null;
       state.stageDefeated = state.stageGoal;
     }
 
     state.enemyBullets.forEach((bullet) => {
+      if (bullet.life <= 0) return;
+
+      const servantCount = state.servants.length;
+      const now = performance.now();
+      for (let index = 0; index < servantCount; index += 1) {
+        const servant = state.servants[index];
+        if (!servant || !servant.alive) continue;
+        const orbit = getServantOrbitPoint(index, servantCount, now);
+        const servantRadius = player.radius * 0.52;
+        if (distance(bullet.x, bullet.y, orbit.x, orbit.y) <= servantRadius + bullet.radius) {
+          bullet.life = 0;
+          damageServant(servant, bullet.damage);
+          addParticles(orbit.x, orbit.y, "#9bd9ff", 8, 2.1);
+          return;
+        }
+      }
+
       if (distance(bullet.x, bullet.y, player.x, player.y) <= player.radius + bullet.radius) {
         bullet.life = 0;
         playerTakeDamage(bullet.damage);
@@ -1293,6 +2491,21 @@ if (arenaDom.canvas) {
     });
 
     state.enemies.forEach((enemy) => {
+      const servantCount = state.servants.length;
+      const now = performance.now();
+      for (let index = 0; index < servantCount; index += 1) {
+        const servant = state.servants[index];
+        if (!servant || !servant.alive) continue;
+        const orbit = getServantOrbitPoint(index, servantCount, now);
+        const servantRadius = player.radius * 0.52;
+        if (distance(enemy.x, enemy.y, orbit.x, orbit.y) <= enemy.radius + servantRadius) {
+          const scaling = getEnemyStageScaling(state.stage);
+          damageServant(servant, scaling.contactDamage);
+          enemy.hp -= 22;
+          addParticles(orbit.x, orbit.y, "#8fd6ff", 6, 1.9);
+        }
+      }
+
       if (distance(enemy.x, enemy.y, player.x, player.y) <= enemy.radius + player.radius) {
         const scaling = getEnemyStageScaling(state.stage);
         playerTakeDamage(scaling.contactDamage);
@@ -1313,6 +2526,19 @@ if (arenaDom.canvas) {
         if (d <= player.radius + 10 && state.bossLaserTick <= 0) {
           playerTakeDamage(state.boss.laserTickDamage || 14);
           state.bossLaserTick = 120;
+        }
+
+        const servantCount = state.servants.length;
+        const now = performance.now();
+        for (let index = 0; index < servantCount; index += 1) {
+          const servant = state.servants[index];
+          if (!servant || !servant.alive) continue;
+          const orbit = getServantOrbitPoint(index, servantCount, now);
+          const ds = distanceToLaser(state.boss.x, state.boss.y, state.boss.laser.angle, orbit.x, orbit.y);
+          if (ds <= player.radius * 0.52 + 8 && state.bossLaserTick <= 0) {
+            damageServant(servant, (state.boss.laserTickDamage || 14) * 0.7);
+            addParticles(orbit.x, orbit.y, "#b9b5ff", 7, 1.8);
+          }
         }
       }
     }
@@ -1381,6 +2607,27 @@ if (arenaDom.canvas) {
     });
     ctx.globalAlpha = 1;
 
+    state.skyTraffic.forEach((craft) => {
+      const tint = 170 + craft.hueShift;
+      ctx.globalAlpha = craft.alpha;
+      ctx.fillStyle = `hsla(${tint}, 80%, 78%, 1)`;
+      ctx.beginPath();
+      ctx.moveTo(craft.x + craft.size, craft.y);
+      ctx.lineTo(craft.x - craft.size * 0.7, craft.y + craft.size * 0.33);
+      ctx.lineTo(craft.x - craft.size * 0.35, craft.y);
+      ctx.lineTo(craft.x - craft.size * 0.7, craft.y - craft.size * 0.33);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(180,220,255,0.25)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(craft.x - craft.size * 0.9, craft.y);
+      ctx.lineTo(craft.x - craft.size * 2.4, craft.y);
+      ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+
     ctx.fillStyle = theme.starTint;
     state.stars.forEach((star) => {
       ctx.globalAlpha = 0.35 + star.depth * 0.3;
@@ -1406,6 +2653,9 @@ if (arenaDom.canvas) {
   function drawPlayerPlane() {
     const player = state.player;
     const angle = aim.angle;
+    const plane = getActivePlane();
+    const wingSpan = 13 * plane.wingScale;
+    const bodyTail = 24 + plane.id * 0.03;
 
     ctx.save();
     ctx.translate(player.x, player.y);
@@ -1414,23 +2664,23 @@ if (arenaDom.canvas) {
     const alpha = player.invuln > 0 ? 0.65 + Math.sin(performance.now() * 0.03) * 0.2 : 1;
     ctx.globalAlpha = alpha;
 
-    ctx.shadowColor = "rgba(120, 255, 170, 0.8)";
-    ctx.shadowBlur = 14;
-    ctx.fillStyle = "#7fffc2";
+    ctx.shadowColor = plane.glow;
+    ctx.shadowBlur = 10 + Math.min(18, plane.id * 0.18);
+    ctx.fillStyle = plane.primary;
 
     ctx.beginPath();
     ctx.moveTo(0, -24);
-    ctx.lineTo(13, 12);
+    ctx.lineTo(wingSpan, 12);
     ctx.lineTo(4, 8);
-    ctx.lineTo(4, 24);
-    ctx.lineTo(-4, 24);
+    ctx.lineTo(4, bodyTail);
+    ctx.lineTo(-4, bodyTail);
     ctx.lineTo(-4, 8);
-    ctx.lineTo(-13, 12);
+    ctx.lineTo(-wingSpan, 12);
     ctx.closePath();
     ctx.fill();
 
     ctx.shadowBlur = 0;
-    ctx.fillStyle = "#14342a";
+    ctx.fillStyle = plane.secondary;
     ctx.fillRect(-4, -6, 8, 18);
 
     const flame = 6 + Math.sin(performance.now() * 0.04) * 3;
@@ -1467,6 +2717,69 @@ if (arenaDom.canvas) {
     ctx.fillRect(barX, barY, barW * hpRatio, barH);
     ctx.strokeStyle = "rgba(255,255,255,0.25)";
     ctx.strokeRect(barX, barY, barW, barH);
+  }
+
+  function drawPlaneServants() {
+    const servantCount = state.servants.length;
+    if (servantCount <= 0) return;
+
+    const plane = getActivePlane();
+    const maxPlane = state.planes[MAX_PLANES - 1];
+    const bigServantScale = Math.max(1.2, maxPlane.wingScale * 0.45);
+    const smallServantScale = 0.52;
+    const now = performance.now();
+
+    for (let index = 0; index < servantCount; index += 1) {
+      const servantState = state.servants[index];
+      if (!servantState) {
+        continue;
+      }
+
+      const servant = getServantOrbitPoint(index, servantCount, now);
+      const facing = aim.angle;
+
+      if (!servantState.alive) {
+        ctx.save();
+        ctx.translate(servant.x, servant.y);
+        ctx.fillStyle = "rgba(255,255,255,0.28)";
+        ctx.beginPath();
+        ctx.arc(0, 0, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        ctx.font = "600 8px Rubik";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(`${Math.ceil(servantState.respawnTimer / 1000)}`, 0, 0.5);
+        ctx.restore();
+        continue;
+      }
+
+      ctx.save();
+      ctx.translate(servant.x, servant.y);
+      ctx.rotate(facing + Math.PI / 2);
+      const servantScale = servantState.isBig ? bigServantScale : smallServantScale;
+      ctx.scale(servantScale, servantScale);
+
+      ctx.shadowColor = servantState.isBig ? plane.glow : "rgba(180, 255, 215, 0.55)";
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = servantState.isBig ? plane.secondary : "#8de1ff";
+
+      ctx.beginPath();
+      ctx.moveTo(0, -18);
+      ctx.lineTo(9, 10);
+      ctx.lineTo(3, 7);
+      ctx.lineTo(3, 18);
+      ctx.lineTo(-3, 18);
+      ctx.lineTo(-3, 7);
+      ctx.lineTo(-9, 10);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(255,255,255,0.6)";
+      ctx.fillRect(-2, -4, 4, 10);
+      ctx.restore();
+    }
   }
 
   function drawEnemyPlane(enemy) {
@@ -1647,10 +2960,11 @@ if (arenaDom.canvas) {
 
   function drawPulse() {
     const player = state.player;
+    const plane = getActivePlane();
     if (player.pulseFlash <= 0) return;
 
     const alpha = player.pulseFlash / 150;
-    const radius = player.pulseRadius - player.pulseFlash * 0.3;
+    const radius = player.pulseRadius * plane.pulseRadiusMult - player.pulseFlash * 0.3;
 
     ctx.strokeStyle = `rgba(149,169,255,${alpha})`;
     ctx.lineWidth = 4;
@@ -1695,6 +3009,7 @@ if (arenaDom.canvas) {
     drawBullets();
     state.enemies.forEach(drawEnemyPlane);
     drawBoss();
+    drawPlaneServants();
     drawPlayerPlane();
     drawPickups();
     drawParticles();
@@ -1713,14 +3028,28 @@ if (arenaDom.canvas) {
   }
 
   function chooseUpgrade(slot) {
+    if (state.upgradeAutoPickTimer) {
+      clearTimeout(state.upgradeAutoPickTimer);
+      state.upgradeAutoPickTimer = null;
+    }
+
     const selected = state.availableUpgrades[slot];
     if (!selected) return;
 
-    selected.apply(state.player);
+    // הצגת tier בצ'אט או overlay
+    showOverlay(
+      `שדרוג ${selected.title} (${selected.tier.name})`,
+      `רמה: ${selected.tier.name} | צבע: ${selected.tier.color}`
+    );
+    // תיקון: מתחיל שלב חדש מיד, overlay ייסגר אוטומטית
+    selected.apply(state.player, selected.tier);
     state.player.hp = state.player.maxHp;
     state.score += 30;
     startNextStage();
     updateHud();
+    setTimeout(() => {
+      hideOverlay();
+    }, 900);
   }
 
   function setFullscreenButtonLabel() {
@@ -1743,6 +3072,48 @@ if (arenaDom.canvas) {
     }
   }
 
+  function setCreatorMode(enabled) {
+    state.creatorMode = Boolean(enabled);
+    if (state.creatorMode) {
+      state.unlockedPlaneCount = MAX_PLANES;
+      state.activePlaneId = MAX_PLANES;
+    }
+    savePlaneProgress();
+    resetGame();
+  }
+
+  window.activateHaloCreatorMode = (code) => {
+    if (code !== CREATOR_ACCESS_CODE) {
+      return false;
+    }
+    setCreatorMode(true);
+    localStorage.setItem(CREATOR_MODE_KEY, "1");
+    return true;
+  };
+
+  window.disableHaloCreatorMode = () => {
+    setCreatorMode(false);
+    localStorage.removeItem(CREATOR_MODE_KEY);
+    return true;
+  };
+
+  if (localStorage.getItem(CREATOR_MODE_KEY) === "1") {
+    state.creatorMode = true;
+    enforceCreatorModePlanes();
+  }
+
+  setMusicButtonLabel();
+
+  window.addEventListener(
+    "pointerdown",
+    () => {
+      if (!state.musicEnabled) {
+        void setMusicEnabled(true);
+      }
+    },
+    { once: true }
+  );
+
   window.addEventListener("keydown", (event) => {
     const key = event.key.toLowerCase();
 
@@ -1753,6 +3124,10 @@ if (arenaDom.canvas) {
     }
 
     keys.add(key);
+
+    if (!state.musicEnabled && (key === "w" || key === "a" || key === "s" || key === "d" || key === "arrowup" || key === "arrowdown" || key === "arrowleft" || key === "arrowright")) {
+      void setMusicEnabled(true);
+    }
 
     if (key === "shift") {
       event.preventDefault();
@@ -1770,7 +3145,53 @@ if (arenaDom.canvas) {
     keys.delete(key);
   });
 
+  arenaDom.canvas.addEventListener("pointerdown", (event) => {
+    if (event.pointerType !== "touch") return;
+    touchInput.active = true;
+    touchInput.pointerId = event.pointerId;
+    const rect = arenaDom.canvas.getBoundingClientRect();
+    const scaleX = WIDTH / rect.width;
+    const scaleY = HEIGHT / rect.height;
+    touchInput.targetX = (event.clientX - rect.left) * scaleX;
+    touchInput.targetY = (event.clientY - rect.top) * scaleY;
+  });
+
+  arenaDom.canvas.addEventListener("pointermove", (event) => {
+    if (!touchInput.active || touchInput.pointerId !== event.pointerId) return;
+    const rect = arenaDom.canvas.getBoundingClientRect();
+    const scaleX = WIDTH / rect.width;
+    const scaleY = HEIGHT / rect.height;
+    touchInput.targetX = (event.clientX - rect.left) * scaleX;
+    touchInput.targetY = (event.clientY - rect.top) * scaleY;
+  });
+
+  const releaseTouchMove = (event) => {
+    if (touchInput.pointerId !== event.pointerId) return;
+    touchInput.active = false;
+    touchInput.pointerId = null;
+  };
+  arenaDom.canvas.addEventListener("pointerup", releaseTouchMove);
+  arenaDom.canvas.addEventListener("pointercancel", releaseTouchMove);
+
+  if (arenaDom.touchDash) {
+    arenaDom.touchDash.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      triggerDash();
+    });
+  }
+  if (arenaDom.touchPulse) {
+    arenaDom.touchPulse.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      triggerPulse();
+    });
+  }
+
   arenaDom.restartBtn.addEventListener("click", resetGame);
+  if (arenaDom.musicBtn) {
+    arenaDom.musicBtn.addEventListener("click", () => {
+      void toggleMusic();
+    });
+  }
   arenaDom.overlayBtn.addEventListener("click", resetGame);
   arenaDom.upg1.addEventListener("click", () => chooseUpgrade(0));
   arenaDom.upg2.addEventListener("click", () => chooseUpgrade(1));
@@ -1786,6 +3207,53 @@ if (arenaDom.canvas) {
 
     document.addEventListener("fullscreenchange", () => {
       setFullscreenButtonLabel();
+    });
+  }
+
+  if (arenaDom.planeList) {
+    arenaDom.planeList.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-plane-id]");
+      if (!button) return;
+
+      const planeId = Number(button.dataset.planeId);
+      if (!Number.isInteger(planeId) || planeId < 1 || planeId > MAX_PLANES) return;
+
+      if (planeId > state.unlockedPlaneCount) {
+        const nextUnlock = state.unlockedPlaneCount + 1;
+        if (planeId !== nextUnlock) {
+          showOverlay("קנייה לפי סדר", `קודם צריך לקנות מטוס ${nextUnlock}`);
+          setTimeout(() => {
+            hideOverlay();
+          }, 900);
+          return;
+        }
+
+        const cost = planeId;
+        if (state.coins < cost) {
+          showOverlay("אין מספיק מטבעות", `חסר לך ${cost - state.coins} מטבעות למטוס ${planeId}`);
+          setTimeout(() => {
+            hideOverlay();
+          }, 900);
+          return;
+        }
+
+        state.coins -= cost;
+        state.unlockedPlaneCount = planeId;
+      }
+
+      const wasRunning = state.running;
+      state.activePlaneId = planeId;
+      savePlaneProgress();
+
+      resetGame();
+
+      if (wasRunning) {
+        const plane = getActivePlane();
+        showOverlay(`נבחר ${plane.name}`, `המשחק התחיל מחדש עם ${plane.title}`);
+        setTimeout(() => {
+          hideOverlay();
+        }, 900);
+      }
     });
   }
 
