@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Robot Quest</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="bg-glow glow-1"></div>
+    <div class="bg-glow glow-2"></div>
+
+    <header class="topbar container">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span>Xbox Games Hub</span>
+      </div>
+      <nav class="menu">
+        <a href="index.html">בית</a>
+        <a href="index.html#games">משחקים</a>
+      </nav>
+      <a href="index.html" class="btn btn-outline">חזרה</a>
+    </header>
+
+    <main class="wrapper container">
+      <section class="game-page panel">
+        <h1>Robot Quest</h1>
+        <p class="hint">רובוט לוחם נגד רובוטים: WASD/חצים לתנועה, עכבר לכיוון וירי. בכל שלב נפתחים כלי נשק חזקים יותר, ואחת לכמה שלבים מגיע בוס מכני ענקי.</p>
+
+        <section class="arena-hud">
+          <div class="hud-item">ניקוד: <strong id="rsScore">0</strong></div>
+          <div class="hud-item">חיים: <strong id="rsHealth">100</strong></div>
+          <div class="hud-item">שלב: <strong id="rsStage">1</strong></div>
+          <div class="hud-item">נשק: <strong id="rsWeapon">Pistol</strong></div>
+          <div class="hud-item">אויבים: <strong id="rsEnemies">0</strong></div>
+          <button id="rsRestartBtn" class="btn">התחל מחדש</button>
+        </section>
+
+        <section class="game-shell">
+          <canvas id="robotCanvas" width="960" height="540" aria-label="Robot Siege board"></canvas>
+          <div id="rsOverlay" class="overlay hidden">
+            <h2 id="rsOverlayTitle">Robot Quest</h2>
+            <p id="rsOverlayText"></p>
+            <button id="rsOverlayBtn" class="btn">שחק שוב</button>
+          </div>
+        </section>
+
+        <div class="page-actions">
+          <a href="index.html" class="btn btn-primary">חזרה לפורטל</a>
+        </div>
+      </section>
+    </main>
+
+    <script src="robot-siege.js"></script>
+  </body>
+</html>

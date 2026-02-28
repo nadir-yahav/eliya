@@ -160,6 +160,36 @@ if (arenaDom.canvas) {
       baseHp: 860,
       hpScale: 132,
     },
+    {
+      id: "vortex",
+      name: "Vortex Leviathan",
+      primary: "#8dffe4",
+      secondary: "#d9fff7",
+      laserColor: "rgba(132,255,226,",
+      radius: 58,
+      baseHp: 960,
+      hpScale: 145,
+    },
+    {
+      id: "inferno",
+      name: "Inferno Behemoth",
+      primary: "#ff8a66",
+      secondary: "#ffe2d6",
+      laserColor: "rgba(255,118,88,",
+      radius: 60,
+      baseHp: 1020,
+      hpScale: 155,
+    },
+    {
+      id: "aegis",
+      name: "Aegis Nullframe",
+      primary: "#b5c3ff",
+      secondary: "#f0f4ff",
+      laserColor: "rgba(176,196,255,",
+      radius: 57,
+      baseHp: 1000,
+      hpScale: 152,
+    },
   ];
 
   // מערכת רמות שדרוגים
@@ -774,7 +804,7 @@ if (arenaDom.canvas) {
       .map((upgrade, index) => (upgrade ? index : -1))
       .filter((index) => index >= 0);
     state.selectedUpgradeSlot = availableSlots.length > 0 ? availableSlots[0] : -1;
-    arenaDom.upgradeText.textContent = `שלב ${state.stage} הושלם — בחר שדרוג אחד מתוך ${UPGRADE_OPTIONS_PER_STAGE}`;
+    arenaDom.upgradeText.textContent = `עברת שלב, כל הכבוד! 🎉 שלב ${state.stage} הושלם — בחר שדרוג אחד מתוך ${UPGRADE_OPTIONS_PER_STAGE}`;
 
     const buttons = [arenaDom.upg1, arenaDom.upg2, arenaDom.upg3, arenaDom.upg4, arenaDom.upg5, arenaDom.upg6];
     buttons.forEach((button, index) => {
@@ -3015,6 +3045,11 @@ if (arenaDom.canvas) {
     }
 
     const variant = boss.variant;
+    const now = performance.now();
+    const bodyRadius = variant.radius;
+    const pulse = 1 + Math.sin(now * 0.005) * 0.05;
+    const wing = bodyRadius * 0.78;
+    const tail = bodyRadius * 0.72;
 
     const angle = Math.atan2(state.player.y - boss.y, state.player.x - boss.x);
 
@@ -3023,32 +3058,43 @@ if (arenaDom.canvas) {
     ctx.rotate(angle + Math.PI / 2);
 
     ctx.shadowColor = `${variant.primary}bb`;
-    ctx.shadowBlur = 18;
-    ctx.fillStyle = variant.primary;
+    ctx.shadowBlur = 24;
+
+    const hullGradient = ctx.createLinearGradient(0, -bodyRadius * 1.2, 0, bodyRadius * 0.9);
+    hullGradient.addColorStop(0, variant.secondary);
+    hullGradient.addColorStop(1, variant.primary);
+    ctx.fillStyle = hullGradient;
+
     ctx.beginPath();
-    ctx.moveTo(0, -62);
-    ctx.lineTo(38, 12);
-    ctx.lineTo(22, 26);
-    ctx.lineTo(22, 46);
-    ctx.lineTo(-22, 46);
-    ctx.lineTo(-22, 26);
-    ctx.lineTo(-38, 12);
+    ctx.moveTo(0, -bodyRadius * 1.18 * pulse);
+    ctx.lineTo(wing, bodyRadius * 0.16);
+    ctx.lineTo(bodyRadius * 0.45, bodyRadius * 0.55);
+    ctx.lineTo(bodyRadius * 0.36, tail);
+    ctx.lineTo(-bodyRadius * 0.36, tail);
+    ctx.lineTo(-bodyRadius * 0.45, bodyRadius * 0.55);
+    ctx.lineTo(-wing, bodyRadius * 0.16);
     ctx.closePath();
     ctx.fill();
 
     ctx.shadowBlur = 0;
-    ctx.fillStyle = "#4a2715";
-    ctx.fillRect(-10, -20, 20, 30);
+    ctx.fillStyle = "rgba(8, 13, 26, 0.62)";
+    ctx.fillRect(-bodyRadius * 0.16, -bodyRadius * 0.36, bodyRadius * 0.32, bodyRadius * 0.56);
 
     ctx.fillStyle = variant.secondary;
-    ctx.fillRect(-24, 8, 48, 8);
+    ctx.fillRect(-bodyRadius * 0.45, bodyRadius * 0.16, bodyRadius * 0.9, bodyRadius * 0.12);
+
+    ctx.strokeStyle = `${variant.secondary}cc`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, -bodyRadius * 0.05, bodyRadius * 0.3, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
 
     const ratio = clamp(boss.hp / boss.maxHp, 0, 1);
-    ctx.fillStyle = "rgba(0,0,0,0.4)";
-    ctx.fillRect(boss.x - 84, boss.y - boss.radius - 20, 168, 8);
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.fillRect(boss.x - 90, boss.y - boss.radius - 22, 180, 8);
     ctx.fillStyle = variant.secondary;
-    ctx.fillRect(boss.x - 84, boss.y - boss.radius - 20, 168 * ratio, 8);
+    ctx.fillRect(boss.x - 90, boss.y - boss.radius - 22, 180 * ratio, 8);
 
     if (boss.laser.mode === "charge" || boss.laser.mode === "fire") {
       const alpha = boss.laser.mode === "charge" ? 0.32 : 0.85;
@@ -3063,6 +3109,41 @@ if (arenaDom.canvas) {
       ctx.lineTo(boss.x + lineX * 1400, boss.y + lineY * 1400);
       ctx.stroke();
     }
+  }
+
+  function drawBossTopHealthBar() {
+    const boss = state.boss;
+    if (!boss) return;
+
+    const ratio = clamp(boss.hp / boss.maxHp, 0, 1);
+    const barWidth = 440;
+    const barHeight = 18;
+    const x = (WIDTH - barWidth) / 2;
+    const y = 18;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(7,10,18,0.82)";
+    ctx.fillRect(x - 2, y - 2, barWidth + 4, barHeight + 4);
+
+    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    ctx.fillRect(x, y, barWidth, barHeight);
+
+    const gradient = ctx.createLinearGradient(x, y, x + barWidth, y);
+    gradient.addColorStop(0, boss.variant.primary);
+    gradient.addColorStop(1, boss.variant.secondary);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x, y, barWidth * ratio, barHeight);
+
+    ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x, y, barWidth, barHeight);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "700 13px Rubik";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(`${boss.variant.name} • HP ${Math.max(0, Math.floor(boss.hp))} / ${Math.floor(boss.maxHp)}`, WIDTH / 2, y - 11);
+    ctx.restore();
   }
 
   function drawBullets() {
@@ -3176,6 +3257,7 @@ if (arenaDom.canvas) {
     drawParticles();
     drawCrosshair();
     drawStageBanner();
+    drawBossTopHealthBar();
   }
 
   function loop(now) {
