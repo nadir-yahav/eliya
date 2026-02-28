@@ -38,7 +38,17 @@ if (arenaDom.canvas) {
 
   const keys = new Set();
   const aim = { x: 0, y: -1, angle: -Math.PI / 2 };
-  const gamepadInput = { moveX: 0, moveY: 0, dashPressed: false, pulsePressed: false };
+  const gamepadInput = {
+    moveX: 0,
+    moveY: 0,
+    dashPressed: false,
+    pulsePressed: false,
+    upgradeLeftPressed: false,
+    upgradeRightPressed: false,
+    upgradeConfirmPressed: false,
+    upgradeRepeatDirection: 0,
+    upgradeRepeatAt: 0,
+  };
   const touchInput = { active: false, pointerId: null, targetX: 0, targetY: 0 };
 
   const THEMES = [
@@ -157,28 +167,28 @@ if (arenaDom.canvas) {
     {
       name: "ירוק",
       color: "#2ecc40",
-      chance: 0.40,
+      chance: 0.17,
       power: 1.05,
       health: 1.05,
     },
     {
       name: "כחול",
       color: "#3498db",
-      chance: 0.30,
+      chance: 0.18,
       power: 1.12,
       health: 1.12,
     },
     {
       name: "סגול",
       color: "#9b59b6",
-      chance: 0.25,
+      chance: 0.15,
       power: 1.18,
       health: 1.18,
     },
     {
       name: "אדום",
       color: "#e74c3c",
-      chance: 0.20,
+      chance: 0.14,
       power: 1.25,
       health: 1.25,
     },
@@ -192,16 +202,23 @@ if (arenaDom.canvas) {
     {
       name: "צהוב",
       color: "#ffff00",
-      chance: 0.10,
-      power: 1.40,
-      health: 1.40,
+      chance: 0.15,
+      power: 1.75,
+      health: 1.70,
     },
     {
       name: "קשת",
       color: "linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet)",
-      chance: 0.05,
-      power: 1.50,
-      health: 1.50,
+      chance: 0.10,
+      power: 2.20,
+      health: 2.10,
+    },
+    {
+      name: "שחור-לבן",
+      color: "linear-gradient(90deg, #000000, #ffffff)",
+      chance: 0.01,
+      power: 3.60,
+      health: 3.20,
     },
   ];
 
@@ -267,9 +284,13 @@ if (arenaDom.canvas) {
       }
 
       const parsed = JSON.parse(raw);
-      const unlockedPlaneCount = clamp(Number(parsed.unlockedPlaneCount) || 1, 1, MAX_PLANES);
-      const activePlaneId = clamp(Number(parsed.activePlaneId) || unlockedPlaneCount, 1, unlockedPlaneCount);
       const creatorMode = parsed.creatorMode === true;
+      const unlockedPlaneCount = creatorMode
+        ? MAX_PLANES
+        : clamp(Number(parsed.unlockedPlaneCount) || 1, 1, MAX_PLANES);
+      const activePlaneId = creatorMode
+        ? clamp(Number(parsed.activePlaneId) || MAX_PLANES, 1, MAX_PLANES)
+        : clamp(Number(parsed.activePlaneId) || unlockedPlaneCount, 1, unlockedPlaneCount);
       const coins = Math.max(0, Number(parsed.coins) || 0);
       return { unlockedPlaneCount, activePlaneId, creatorMode, coins };
     } catch {
@@ -684,6 +705,7 @@ if (arenaDom.canvas) {
     activePlaneId: initialPlaneProgress.activePlaneId,
     servants: [],
     availableUpgrades: [],
+    selectedUpgradeSlot: -1,
     upgradeAutoPickTimer: null,
     musicEnabled: false,
     player: {
@@ -737,6 +759,8 @@ if (arenaDom.canvas) {
     "https://pixabay.com/music/upbeat-retro-arcade-game-music-297305/",
     "https://pixabay.com/music/upbeat-game-minecraft-gaming-background-music-402451/",
   ];
+  const BOSS_STAGE_TRACK_URL = "https://pixabay.com/music/electronic-retro-arcade-game-music-487316/";
+  const BOSS_STAGE_TRACK_INDEX = Math.max(0, REAL_MUSIC_PLAYLIST.indexOf(BOSS_STAGE_TRACK_URL));
 
   function showUpgradeSelection(upgrades) {
     state.running = false;
@@ -746,6 +770,10 @@ if (arenaDom.canvas) {
       state.upgradeAutoPickTimer = null;
     }
     state.availableUpgrades = upgrades;
+    const availableSlots = state.availableUpgrades
+      .map((upgrade, index) => (upgrade ? index : -1))
+      .filter((index) => index >= 0);
+    state.selectedUpgradeSlot = availableSlots.length > 0 ? availableSlots[0] : -1;
     arenaDom.upgradeText.textContent = `שלב ${state.stage} הושלם — בחר שדרוג אחד מתוך ${UPGRADE_OPTIONS_PER_STAGE}`;
 
     const buttons = [arenaDom.upg1, arenaDom.upg2, arenaDom.upg3, arenaDom.upg4, arenaDom.upg5, arenaDom.upg6];
@@ -771,6 +799,9 @@ if (arenaDom.canvas) {
       }
       button.classList.add("upgrade-btn");
     });
+
+    updateUpgradeSelectionVisual();
+    updateTouchActionLabels();
 
     arenaDom.upgrade.classList.remove("hidden");
 
@@ -798,7 +829,67 @@ if (arenaDom.canvas) {
       clearTimeout(state.upgradeAutoPickTimer);
       state.upgradeAutoPickTimer = null;
     }
+    state.selectedUpgradeSlot = -1;
+    updateUpgradeSelectionVisual();
     arenaDom.upgrade.classList.add("hidden");
+    updateTouchActionLabels();
+  }
+
+  function isUpgradeOverlayVisible() {
+    return Boolean(arenaDom.upgrade && !arenaDom.upgrade.classList.contains("hidden"));
+  }
+
+  function updateTouchActionLabels() {
+    if (!arenaDom.touchDash || !arenaDom.touchPulse) return;
+    if (isUpgradeOverlayVisible()) {
+      arenaDom.touchDash.textContent = "שדרוג הבא";
+      arenaDom.touchPulse.textContent = "בחר שדרוג";
+    } else {
+      arenaDom.touchDash.textContent = "Dash";
+      arenaDom.touchPulse.textContent = "Pulse";
+    }
+  }
+
+  function getUpgradeButtons() {
+    return [arenaDom.upg1, arenaDom.upg2, arenaDom.upg3, arenaDom.upg4, arenaDom.upg5, arenaDom.upg6];
+  }
+
+  function getAvailableUpgradeSlots() {
+    return state.availableUpgrades
+      .map((upgrade, index) => (upgrade ? index : -1))
+      .filter((index) => index >= 0);
+  }
+
+  function updateUpgradeSelectionVisual() {
+    const buttons = getUpgradeButtons();
+    buttons.forEach((button, index) => {
+      if (!button || button.classList.contains("hidden")) return;
+      if (index === state.selectedUpgradeSlot) {
+        button.style.outline = "3px solid #ffffff";
+        button.style.outlineOffset = "2px";
+        button.style.filter = "brightness(1.18)";
+      } else {
+        button.style.outline = "none";
+        button.style.outlineOffset = "0";
+        button.style.filter = "brightness(1)";
+      }
+    });
+  }
+
+  function moveUpgradeSelection(direction) {
+    const availableSlots = getAvailableUpgradeSlots();
+    if (availableSlots.length === 0) return;
+
+    const currentIndex = availableSlots.indexOf(state.selectedUpgradeSlot);
+    const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (safeCurrentIndex + direction + availableSlots.length) % availableSlots.length;
+    state.selectedUpgradeSlot = availableSlots[nextIndex];
+    updateUpgradeSelectionVisual();
+  }
+
+  function confirmSelectedUpgrade() {
+    if (state.selectedUpgradeSlot < 0) return;
+    chooseUpgrade(state.selectedUpgradeSlot);
   }
 
   function clamp(value, min, max) {
@@ -823,12 +914,66 @@ if (arenaDom.canvas) {
     if (!pad) {
       gamepadInput.dashPressed = false;
       gamepadInput.pulsePressed = false;
+      gamepadInput.upgradeLeftPressed = false;
+      gamepadInput.upgradeRightPressed = false;
+      gamepadInput.upgradeConfirmPressed = false;
+      gamepadInput.upgradeRepeatDirection = 0;
       return;
     }
 
     const deadzone = 0.18;
     const axisX = pad.axes[0] || 0;
     const axisY = pad.axes[1] || 0;
+
+    const upgradeVisible = isUpgradeOverlayVisible();
+    if (upgradeVisible) {
+      const nowMs = performance.now();
+      const horizontalAxis = pad.axes[0] || 0;
+      const leftNow = Boolean(pad.buttons[14]?.pressed || pad.buttons[4]?.pressed || horizontalAxis <= -0.6);
+      const rightNow = Boolean(pad.buttons[15]?.pressed || pad.buttons[5]?.pressed || horizontalAxis >= 0.6);
+      const confirmNow = Boolean(pad.buttons[0]?.pressed || pad.buttons[1]?.pressed);
+
+      let direction = 0;
+      if (leftNow && !rightNow) direction = -1;
+      if (rightNow && !leftNow) direction = 1;
+
+      if (direction !== 0) {
+        if (gamepadInput.upgradeRepeatDirection !== direction) {
+          moveUpgradeSelection(direction);
+          gamepadInput.upgradeRepeatDirection = direction;
+          gamepadInput.upgradeRepeatAt = nowMs + 260;
+        } else if (nowMs >= gamepadInput.upgradeRepeatAt) {
+          moveUpgradeSelection(direction);
+          gamepadInput.upgradeRepeatAt = nowMs + 140;
+        }
+      } else {
+        gamepadInput.upgradeRepeatDirection = 0;
+      }
+
+      if (leftNow && !gamepadInput.upgradeLeftPressed) {
+        moveUpgradeSelection(-1);
+      }
+      if (rightNow && !gamepadInput.upgradeRightPressed) {
+        moveUpgradeSelection(1);
+      }
+      if (confirmNow && !gamepadInput.upgradeConfirmPressed) {
+        confirmSelectedUpgrade();
+      }
+
+      gamepadInput.upgradeLeftPressed = leftNow;
+      gamepadInput.upgradeRightPressed = rightNow;
+      gamepadInput.upgradeConfirmPressed = confirmNow;
+      gamepadInput.dashPressed = false;
+      gamepadInput.pulsePressed = false;
+      gamepadInput.moveX = 0;
+      gamepadInput.moveY = 0;
+      return;
+    }
+
+    gamepadInput.upgradeLeftPressed = false;
+    gamepadInput.upgradeRightPressed = false;
+    gamepadInput.upgradeConfirmPressed = false;
+    gamepadInput.upgradeRepeatDirection = 0;
     gamepadInput.moveX = Math.abs(axisX) > deadzone ? axisX : 0;
     gamepadInput.moveY = Math.abs(axisY) > deadzone ? axisY : 0;
 
@@ -1166,10 +1311,11 @@ if (arenaDom.canvas) {
     return null;
   }
 
-  async function playNextRealTrack(excludeCurrent = true) {
+  async function playRealTrackByIndex(index) {
     if (!musicAudio) return;
-    musicStep = pickRandomTrackIndex(excludeCurrent);
-    const trackUrl = REAL_MUSIC_PLAYLIST[musicStep];
+    const normalizedIndex = clamp(index, 0, REAL_MUSIC_PLAYLIST.length - 1);
+    musicStep = normalizedIndex;
+    const trackUrl = REAL_MUSIC_PLAYLIST[normalizedIndex];
     const playable = await resolvePlayableTrackSource(trackUrl);
     if (!playable) {
       realMusicErrorCount += 1;
@@ -1190,6 +1336,12 @@ if (arenaDom.canvas) {
         });
       }
     }
+  }
+
+  async function playNextRealTrack(excludeCurrent = true) {
+    if (!musicAudio) return;
+    const nextIndex = pickRandomTrackIndex(excludeCurrent);
+    await playRealTrackByIndex(nextIndex);
   }
 
   async function enableSynthMusicFallback() {
@@ -1214,6 +1366,12 @@ if (arenaDom.canvas) {
     if (musicRotateTimer) return;
     musicRotateTimer = setInterval(() => {
       if (!state.musicEnabled) return;
+      if (state.isBossStage) {
+        if (musicStep !== BOSS_STAGE_TRACK_INDEX) {
+          void playRealTrackByIndex(BOSS_STAGE_TRACK_INDEX);
+        }
+        return;
+      }
       void playNextRealTrack(true);
     }, 65000);
   }
@@ -1708,6 +1866,9 @@ if (arenaDom.canvas) {
 
     if (state.isBossStage) {
       spawnBoss();
+      if (state.musicEnabled && musicAudio) {
+        void playRealTrackByIndex(BOSS_STAGE_TRACK_INDEX);
+      }
     }
   }
 
@@ -3176,12 +3337,20 @@ if (arenaDom.canvas) {
   if (arenaDom.touchDash) {
     arenaDom.touchDash.addEventListener("pointerdown", (event) => {
       event.preventDefault();
+      if (isUpgradeOverlayVisible()) {
+        moveUpgradeSelection(1);
+        return;
+      }
       triggerDash();
     });
   }
   if (arenaDom.touchPulse) {
     arenaDom.touchPulse.addEventListener("pointerdown", (event) => {
       event.preventDefault();
+      if (isUpgradeOverlayVisible()) {
+        confirmSelectedUpgrade();
+        return;
+      }
       triggerPulse();
     });
   }
@@ -3257,6 +3426,7 @@ if (arenaDom.canvas) {
     });
   }
 
+  updateTouchActionLabels();
   resetGame();
   requestAnimationFrame(loop);
 }
