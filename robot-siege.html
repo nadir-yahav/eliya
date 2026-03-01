@@ -3,60 +3,303 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Robot Quest</title>
+    <title>Robot Siege 3D</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css" />
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Rubik", sans-serif;
+        background: #0a0f1a;
+        color: #eaf4ff;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+      }
+
+      .game-root {
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: auto auto 1fr;
+        padding: 14px;
+        gap: 12px;
+      }
+
+      .topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .title-wrap h1 {
+        margin: 0;
+        font-size: 1.5rem;
+      }
+
+      .title-wrap p {
+        margin: 6px 0 0;
+        color: #bcd4ff;
+        font-size: 0.95rem;
+      }
+
+      .btn {
+        border: 1px solid #4f79c6;
+        background: #13233f;
+        color: #fff;
+        border-radius: 10px;
+        padding: 9px 14px;
+        cursor: pointer;
+        font: inherit;
+      }
+
+      .hud {
+        display: grid;
+        grid-template-columns: repeat(9, minmax(96px, 1fr)) auto;
+        gap: 10px;
+      }
+
+      .hud-item {
+        background: #111c31;
+        border: 1px solid #2a3f69;
+        border-radius: 10px;
+        padding: 9px 10px;
+        font-size: 0.94rem;
+      }
+
+      .shell {
+        position: relative;
+        border: 1px solid #314c7b;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #070b14;
+        display: grid;
+        place-items: center;
+      }
+
+      canvas {
+        width: min(100%, 1200px);
+        height: auto;
+        max-height: calc(100vh - 230px);
+        display: block;
+      }
+
+      .overlay {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(4, 8, 15, 0.72);
+      }
+
+      .overlay-box {
+        text-align: center;
+        background: #0d1729;
+        border: 1px solid #345183;
+        border-radius: 14px;
+        padding: 20px;
+        min-width: 280px;
+      }
+
+      .overlay-box h2 {
+        margin: 0 0 8px;
+      }
+
+      .boss-bar {
+        position: absolute;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(680px, 88%);
+        z-index: 5;
+        background: rgba(7, 15, 28, 0.85);
+        border: 1px solid #5c7fc0;
+        border-radius: 12px;
+        padding: 8px 10px;
+      }
+
+      .boss-bar-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+        font-size: 0.9rem;
+        color: #deecff;
+      }
+
+      .boss-bar-track {
+        height: 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+        overflow: hidden;
+      }
+
+      .boss-bar-fill {
+        height: 100%;
+        width: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #ff7b54, #ffb35f 52%, #ffd783);
+        transition: width 0.12s linear;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .upgrade-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(180px, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      @media (max-width: 1100px) {
+        .hud {
+          grid-template-columns: repeat(4, minmax(110px, 1fr));
+        }
+
+        .upgrade-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .upgrade-btn.active {
+        outline: 3px solid #ffffff;
+        filter: brightness(1.15);
+      }
+
+      body.fullscreen-mode .game-root {
+        min-height: 100vh;
+        grid-template-rows: 1fr;
+        padding: 0;
+        gap: 0;
+      }
+
+      body.fullscreen-mode .topline,
+      body.fullscreen-mode .hud {
+        display: none;
+      }
+
+      body.fullscreen-mode .shell {
+        border: none;
+        border-radius: 0;
+        width: 100vw;
+        height: 100vh;
+      }
+
+      body.fullscreen-mode canvas {
+        width: 100vw;
+        height: 100vh;
+        max-height: none;
+      }
+    </style>
   </head>
   <body>
-    <div class="bg-glow glow-1"></div>
-    <div class="bg-glow glow-2"></div>
+    <main class="game-root">
+      <section class="topline">
+        <div class="title-wrap">
+          <h1>Robot Siege 3D</h1>
+          <p>משחק רובוטים תלת־ממדי ב־JavaScript: תנועה עם WASD/חצים, ירי עם עכבר/רווח.</p>
+        </div>
+        <a href="index.html" class="btn">חזרה לפורטל</a>
+      </section>
 
-    <header class="topbar container">
-      <div class="brand">
-        <span class="brand-dot"></span>
-        <span>Xbox Games Hub</span>
-      </div>
-      <nav class="menu">
-        <a href="index.html">בית</a>
-        <a href="index.html#games">משחקים</a>
-      </nav>
-      <a href="index.html" class="btn btn-outline">חזרה</a>
-    </header>
+      <section class="hud">
+        <div class="hud-item">רובוט:
+          <select id="rsClass" class="btn" style="padding: 4px 8px; margin-inline-start: 6px;">
+            <option value="assault">Assault</option>
+            <option value="guardian">Guardian</option>
+            <option value="striker">Striker</option>
+          </select>
+        </div>
+        <div class="hud-item">ניקוד: <strong id="rsScore">0</strong></div>
+        <div class="hud-item">חיים: <strong id="rsHealth">100</strong></div>
+        <div class="hud-item">שלב: <strong id="rsStage">1</strong></div>
+        <div class="hud-item">נשק: <strong id="rsWeapon">Pulse Pistol</strong></div>
+        <div class="hud-item">אויבים: <strong id="rsEnemies">0</strong></div>
+        <div class="hud-item">Dash: <strong id="rsDash">Ready</strong></div>
+        <div class="hud-item">Shield: <strong id="rsShield">Ready</strong></div>
+        <div class="hud-item">Ultimate: <strong id="rsUltimate">Ready</strong></div>
+        <button id="rsFullscreenBtn" class="btn">מסך מלא</button>
+        <button id="rsRestartBtn" class="btn">התחל מחדש</button>
+      </section>
 
-    <main class="wrapper container">
-      <section class="game-page panel">
-        <h1>Robot Quest</h1>
-        <p class="hint">רובוט לוחם נגד רובוטים: WASD/חצים לתנועה, עכבר לכיוון וירי. בכל שלב נפתחים כלי נשק חזקים יותר, ואחת לכמה שלבים מגיע בוס מכני ענקי.</p>
-
-        <section class="arena-hud">
-          <div class="hud-item">ניקוד: <strong id="rsScore">0</strong></div>
-          <div class="hud-item">חיים: <strong id="rsHealth">100</strong></div>
-          <div class="hud-item">שלב: <strong id="rsStage">1</strong></div>
-          <div class="hud-item">נשק: <strong id="rsWeapon">Pistol</strong></div>
-          <div class="hud-item">אויבים: <strong id="rsEnemies">0</strong></div>
-          <button id="rsRestartBtn" class="btn">התחל מחדש</button>
-        </section>
-
-        <section class="game-shell">
-          <canvas id="robotCanvas" width="960" height="540" aria-label="Robot Siege board"></canvas>
-          <div id="rsOverlay" class="overlay hidden">
+      <section class="shell">
+        <canvas id="robotCanvas" width="960" height="540" aria-label="Robot Siege 3D board"></canvas>
+        <div id="rsBossBar" class="boss-bar hidden" aria-live="polite">
+          <div class="boss-bar-head">
+            <strong id="rsBossName">BOSS</strong>
+            <span id="rsBossHpText">100%</span>
+          </div>
+          <div class="boss-bar-track">
+            <div id="rsBossHpFill" class="boss-bar-fill"></div>
+          </div>
+        </div>
+        <div id="rsOverlay" class="overlay hidden">
+          <div class="overlay-box">
             <h2 id="rsOverlayTitle">Robot Quest</h2>
             <p id="rsOverlayText"></p>
             <button id="rsOverlayBtn" class="btn">שחק שוב</button>
           </div>
-        </section>
-
-        <div class="page-actions">
-          <a href="index.html" class="btn btn-primary">חזרה לפורטל</a>
+        </div>
+        <div id="rsUpgrade" class="overlay hidden">
+          <div class="overlay-box" style="min-width: min(92vw, 760px)">
+            <h2>בחר שדרוג לשלב הבא</h2>
+            <p id="rsUpgradeText">בחר שדרוג אחד</p>
+            <div class="upgrade-grid">
+              <button id="rsUpg1" class="btn upgrade-btn">Upgrade 1</button>
+              <button id="rsUpg2" class="btn upgrade-btn">Upgrade 2</button>
+              <button id="rsUpg3" class="btn upgrade-btn">Upgrade 3</button>
+            </div>
+          </div>
         </div>
       </section>
     </main>
 
-    <script src="robot-siege.js"></script>
+    <script>
+      (function bootstrapRobotSiege() {
+        function loadScript(src) {
+          return new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = src;
+            script.onload = () => resolve(src);
+            script.onerror = () => reject(new Error(`Failed to load: ${src}`));
+            document.body.appendChild(script);
+          });
+        }
+
+        async function loadWithFallback(localSrc, cdnSrc) {
+          try {
+            await loadScript(localSrc);
+          } catch {
+            await loadScript(cdnSrc);
+          }
+        }
+
+        (async () => {
+          await loadWithFallback("vendor/three.min.js", "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js");
+          await loadWithFallback("vendor/GLTFLoader.js", "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js");
+          await loadWithFallback("vendor/SkeletonUtils.js", "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js");
+          await loadScript("robot-siege.js");
+        })().catch((error) => {
+          console.error("Robot Siege bootstrap failed", error);
+        });
+      })();
+    </script>
   </body>
 </html>

@@ -1,0 +1,12 @@
+{
+  "name": "xbox-games-hub-multiplayer",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Local WebSocket signaling server for Halo Arena duels",
+  "scripts": {
+    "start:duel-server": "node multiplayer-server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

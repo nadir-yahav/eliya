@@ -27,6 +27,17 @@ const arenaDom = {
   coins: document.getElementById("haCoins"),
   touchDash: document.getElementById("haTouchDash"),
   touchPulse: document.getElementById("haTouchPulse"),
+  mpPanel: document.getElementById("haMpPanel"),
+  mpName: document.getElementById("haMpName"),
+  mpMode: document.getElementById("haMpMode"),
+  mpConnect: document.getElementById("haMpConnect"),
+  mpQueue: document.getElementById("haMpQueue"),
+  mpStatus: document.getElementById("haMpStatus"),
+  mpUsers: document.getElementById("haMpUsers"),
+  mpIncoming: document.getElementById("haMpIncoming"),
+  mpIncomingText: document.getElementById("haMpIncomingText"),
+  mpAccept: document.getElementById("haMpAccept"),
+  mpDecline: document.getElementById("haMpDecline"),
 };
 
 if (arenaDom.canvas) {
@@ -45,6 +56,8 @@ if (arenaDom.canvas) {
     pulsePressed: false,
     upgradeLeftPressed: false,
     upgradeRightPressed: false,
+    upgradeUpPressed: false,
+    upgradeDownPressed: false,
     upgradeConfirmPressed: false,
     upgradeRepeatDirection: 0,
     upgradeRepeatAt: 0,
@@ -254,6 +267,27 @@ if (arenaDom.canvas) {
 
   const UPGRADE_OPTIONS_PER_STAGE = 6;
   const MAX_PLANES = 1000;
+  const MAX_PLANE_SPEED_MULT = 2.45;
+  const MAX_PLANE_DASH_MULT = 2.85;
+  const MAX_EFFECTIVE_MOVE_SPEED = 13.5;
+  const MAX_DASH_DISTANCE = 210;
+  const BOSS_DEATH_DURATION_MS = 1700;
+  const DUEL_WIN_COINS = 50;
+  const MATCH_TARGET_POINTS = 5;
+  const DUEL_MAX_HP = 220;
+  const DUEL_SYNC_INTERVAL_MS = 70;
+  const DUEL_BULLET_SPEED = 11.6;
+  const DUEL_BULLET_LIFE = 86;
+  const TEAM_MATCH_REWARD_COINS = 100;
+  const MATCH_MODE_CONFIG = {
+    "1v1": { teamSize: 1, reward: DUEL_WIN_COINS, mapScale: 1 },
+    "2v2": { teamSize: 2, reward: TEAM_MATCH_REWARD_COINS, mapScale: 1 },
+    "3v3": { teamSize: 3, reward: TEAM_MATCH_REWARD_COINS, mapScale: 2 },
+    "4v4": { teamSize: 4, reward: TEAM_MATCH_REWARD_COINS, mapScale: 2 },
+  };
+  const MULTIPLAYER_WS_URL =
+    localStorage.getItem("haloArenaWsUrl") ||
+    `${location.protocol === "https:" ? "wss" : "ws"}://${location.hostname}:8080`;
   const PLANE_PROGRESS_KEY = "haloArenaPlaneProgressV2";
   const CREATOR_MODE_KEY = "haloArenaCreatorModeV2";
   const CREATOR_ACCESS_CODE = "HALO-CREATOR-ONLY-2026";
@@ -273,6 +307,8 @@ if (arenaDom.canvas) {
       const id = index + 1;
       const archetype = PLANE_ARCHETYPES[index % PLANE_ARCHETYPES.length];
       const hue = (index * 31) % 360;
+      const accentHue = (hue + 72 + (id % 27) * 3) % 360;
+      const trimHue = (hue + 180 + id * 2) % 360;
       const tierBoost = 1 + id * 0.012;
       return {
         id,
@@ -281,10 +317,26 @@ if (arenaDom.canvas) {
         primary: `hsl(${hue}, 92%, 62%)`,
         secondary: `hsl(${(hue + 48) % 360}, 95%, 72%)`,
         glow: `hsla(${hue}, 100%, 75%, 0.75)`,
+        trim: `hsl(${trimHue}, 96%, 78%)`,
+        canopy: `hsla(${accentHue}, 95%, 72%, 0.85)`,
+        engine: `hsla(${(hue + 210) % 360}, 100%, 74%, 0.9)`,
+        contrail: `hsla(${(accentHue + 20) % 360}, 95%, 74%, 0.52)`,
+        visual: {
+          wingType: id % 5,
+          finType: Math.floor(id / 3) % 4,
+          canopyType: Math.floor(id / 5) % 4,
+          stripeType: Math.floor(id / 7) % 6,
+          enginePods: 1 + (id % 3 === 0 ? 1 : 0) + (id % 11 === 0 ? 1 : 0),
+          noseLength: 20 + (id % 8) * 1.6,
+          wingDepth: 8 + (id % 6) * 1.2,
+          wingInset: 2 + (id % 4),
+          glowBoost: (id % 10) * 1.4,
+          stripeAlpha: 0.28 + ((id * 17) % 38) / 100,
+        },
         damageMult: archetype.damage * tierBoost,
         fireRateMult: Math.max(0.45, archetype.fireRate - id * 0.0036),
-        speedMult: archetype.speed + id * 0.006,
-        dashMult: archetype.dash + id * 0.008,
+        speedMult: Math.min(MAX_PLANE_SPEED_MULT, archetype.speed + id * 0.006),
+        dashMult: Math.min(MAX_PLANE_DASH_MULT, archetype.dash + id * 0.008),
         dashCooldownMult: Math.max(0.45, 1 - id * 0.003),
         pulsePowerMult: archetype.pulsePower + id * 0.007,
         pulseRadiusMult: archetype.pulseRadius + id * 0.003,
@@ -735,8 +787,24 @@ if (arenaDom.canvas) {
     activePlaneId: initialPlaneProgress.activePlaneId,
     servants: [],
     availableUpgrades: [],
+    pendingUpgrades: null,
     selectedUpgradeSlot: -1,
     upgradeAutoPickTimer: null,
+    multiplayer: {
+      connected: false,
+      socket: null,
+      myId: null,
+      name: "",
+      selectedMode: "1v1",
+      queueing: false,
+      users: [],
+      incomingInvite: null,
+      duel: null,
+    },
+    stageTransitionMs: 0,
+    stageTransitionDuration: 0,
+    stageTransitionTitle: "",
+    stageTransitionSubtitle: "",
     musicEnabled: false,
     player: {
       x: WIDTH / 2,
@@ -804,7 +872,14 @@ if (arenaDom.canvas) {
       .map((upgrade, index) => (upgrade ? index : -1))
       .filter((index) => index >= 0);
     state.selectedUpgradeSlot = availableSlots.length > 0 ? availableSlots[0] : -1;
-    arenaDom.upgradeText.textContent = `עברת שלב, כל הכבוד! 🎉 שלב ${state.stage} הושלם — בחר שדרוג אחד מתוך ${UPGRADE_OPTIONS_PER_STAGE}`;
+    const isBossVictory = state.isBossStage;
+    if (isBossVictory) {
+      const bossTier = getBossTier(state.stage);
+      const bossLabel = bossTier === 1 ? "אחד" : String(bossTier);
+      arenaDom.upgradeText.textContent = `ניצחת את בוס ${bossLabel}! 🏆 בחר שדרוג אחד מתוך ${UPGRADE_OPTIONS_PER_STAGE}`;
+    } else {
+      arenaDom.upgradeText.textContent = `You passed the stage! 🎉 Stage ${state.stage} completed — choose one upgrade out of ${UPGRADE_OPTIONS_PER_STAGE}`;
+    }
 
     const buttons = [arenaDom.upg1, arenaDom.upg2, arenaDom.upg3, arenaDom.upg4, arenaDom.upg5, arenaDom.upg6];
     buttons.forEach((button, index) => {
@@ -926,6 +1001,11 @@ if (arenaDom.canvas) {
     return Math.max(min, Math.min(max, value));
   }
 
+  function easeOutCubic(t) {
+    const clamped = clamp(t, 0, 1);
+    return 1 - (1 - clamped) ** 3;
+  }
+
   function randFromSeed(seed) {
     const x = Math.sin(seed) * 10000;
     return x - Math.floor(x);
@@ -946,6 +1026,8 @@ if (arenaDom.canvas) {
       gamepadInput.pulsePressed = false;
       gamepadInput.upgradeLeftPressed = false;
       gamepadInput.upgradeRightPressed = false;
+      gamepadInput.upgradeUpPressed = false;
+      gamepadInput.upgradeDownPressed = false;
       gamepadInput.upgradeConfirmPressed = false;
       gamepadInput.upgradeRepeatDirection = 0;
       return;
@@ -959,13 +1041,18 @@ if (arenaDom.canvas) {
     if (upgradeVisible) {
       const nowMs = performance.now();
       const horizontalAxis = pad.axes[0] || 0;
+      const verticalAxis = pad.axes[1] || 0;
       const leftNow = Boolean(pad.buttons[14]?.pressed || pad.buttons[4]?.pressed || horizontalAxis <= -0.6);
       const rightNow = Boolean(pad.buttons[15]?.pressed || pad.buttons[5]?.pressed || horizontalAxis >= 0.6);
+      const upNow = Boolean(pad.buttons[12]?.pressed || verticalAxis <= -0.6);
+      const downNow = Boolean(pad.buttons[13]?.pressed || verticalAxis >= 0.6);
       const confirmNow = Boolean(pad.buttons[0]?.pressed || pad.buttons[1]?.pressed);
 
       let direction = 0;
       if (leftNow && !rightNow) direction = -1;
-      if (rightNow && !leftNow) direction = 1;
+      else if (rightNow && !leftNow) direction = 1;
+      else if (upNow && !downNow) direction = -3;
+      else if (downNow && !upNow) direction = 3;
 
       if (direction !== 0) {
         if (gamepadInput.upgradeRepeatDirection !== direction) {
@@ -980,18 +1067,14 @@ if (arenaDom.canvas) {
         gamepadInput.upgradeRepeatDirection = 0;
       }
 
-      if (leftNow && !gamepadInput.upgradeLeftPressed) {
-        moveUpgradeSelection(-1);
-      }
-      if (rightNow && !gamepadInput.upgradeRightPressed) {
-        moveUpgradeSelection(1);
-      }
       if (confirmNow && !gamepadInput.upgradeConfirmPressed) {
         confirmSelectedUpgrade();
       }
 
       gamepadInput.upgradeLeftPressed = leftNow;
       gamepadInput.upgradeRightPressed = rightNow;
+      gamepadInput.upgradeUpPressed = upNow;
+      gamepadInput.upgradeDownPressed = downNow;
       gamepadInput.upgradeConfirmPressed = confirmNow;
       gamepadInput.dashPressed = false;
       gamepadInput.pulsePressed = false;
@@ -1002,6 +1085,8 @@ if (arenaDom.canvas) {
 
     gamepadInput.upgradeLeftPressed = false;
     gamepadInput.upgradeRightPressed = false;
+    gamepadInput.upgradeUpPressed = false;
+    gamepadInput.upgradeDownPressed = false;
     gamepadInput.upgradeConfirmPressed = false;
     gamepadInput.upgradeRepeatDirection = 0;
     gamepadInput.moveX = Math.abs(axisX) > deadzone ? axisX : 0;
@@ -1156,7 +1241,7 @@ if (arenaDom.canvas) {
     let targetAngle = angle;
 
     const targets = state.enemies.map((enemy) => ({ x: enemy.x, y: enemy.y }));
-    if (state.boss) {
+    if (state.boss && !state.boss.dying) {
       targets.push({ x: state.boss.x, y: state.boss.y });
     }
 
@@ -1233,7 +1318,7 @@ if (arenaDom.canvas) {
     const player = state.player;
 
     const targets = state.enemies.map((enemy) => ({ x: enemy.x, y: enemy.y }));
-    if (state.boss) {
+    if (state.boss && !state.boss.dying) {
       targets.push({ x: state.boss.x, y: state.boss.y });
     }
 
@@ -1709,6 +1794,671 @@ if (arenaDom.canvas) {
     arenaDom.overlay.classList.add("hidden");
   }
 
+  function triggerStageTransition(title, subtitle = "") {
+    state.stageTransitionDuration = 1500;
+    state.stageTransitionMs = state.stageTransitionDuration;
+    state.stageTransitionTitle = title;
+    state.stageTransitionSubtitle = subtitle;
+  }
+
+  function sanitizePlayerName(rawName) {
+    return String(rawName || "").trim().replace(/\s+/g, " ").slice(0, 24) || `Pilot-${Math.floor(Math.random() * 900 + 100)}`;
+  }
+
+  function setMultiplayerStatus(text, isError = false) {
+    if (!arenaDom.mpStatus) return;
+    arenaDom.mpStatus.textContent = text;
+    arenaDom.mpStatus.style.color = isError ? "#ff9ea3" : "#8de1ff";
+  }
+
+  function sendMultiplayerMessage(payload) {
+    const socket = state.multiplayer.socket;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+    socket.send(JSON.stringify(payload));
+    return true;
+  }
+
+  function updateIncomingInviteUi() {
+    if (!arenaDom.mpIncoming || !arenaDom.mpIncomingText) return;
+    const invite = state.multiplayer.incomingInvite;
+    if (!invite) {
+      arenaDom.mpIncoming.classList.add("hidden");
+      return;
+    }
+    arenaDom.mpIncoming.classList.remove("hidden");
+    arenaDom.mpIncomingText.textContent = `${invite.fromName} invited you (Plane #${invite.planeId})`;
+  }
+
+  function renderMultiplayerUsers() {
+    if (!arenaDom.mpUsers) return;
+    const fragment = document.createDocumentFragment();
+    const users = state.multiplayer.users.filter((user) => user.id && user.id !== state.multiplayer.myId);
+
+    if (users.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "mp-user";
+      empty.innerHTML = '<span class="mp-user-name">No online players</span>';
+      fragment.appendChild(empty);
+    } else {
+      users.forEach((user) => {
+        const row = document.createElement("div");
+        row.className = "mp-user";
+
+        const name = document.createElement("span");
+        name.className = "mp-user-name";
+        name.textContent = user.name;
+        row.appendChild(name);
+        fragment.appendChild(row);
+      });
+    }
+
+    arenaDom.mpUsers.innerHTML = "";
+    arenaDom.mpUsers.appendChild(fragment);
+  }
+
+  function drawRemoteDuelPlane(x, y, angle, planeId, hpRatio) {
+    const plane = state.planes[Math.max(0, Math.min(MAX_PLANES - 1, planeId - 1))] || state.planes[0];
+    const wing = 12.5 * plane.wingScale;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle + Math.PI / 2);
+
+    const hull = ctx.createLinearGradient(0, -24, 0, 21);
+    hull.addColorStop(0, plane.secondary);
+    hull.addColorStop(1, plane.primary);
+    ctx.fillStyle = hull;
+    ctx.shadowColor = plane.glow;
+    ctx.shadowBlur = 14;
+
+    ctx.beginPath();
+    ctx.moveTo(0, -22);
+    ctx.lineTo(wing, 10);
+    ctx.lineTo(4, 7);
+    ctx.lineTo(4, 22);
+    ctx.lineTo(-4, 22);
+    ctx.lineTo(-4, 7);
+    ctx.lineTo(-wing, 10);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = plane.canopy;
+    ctx.beginPath();
+    ctx.ellipse(0, -2, 3.8, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    const barW = 56;
+    const barX = x - barW / 2;
+    const barY = y - 30;
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.fillRect(barX, barY, barW, 5);
+    ctx.fillStyle = "#ff8768";
+    ctx.fillRect(barX, barY, barW * clamp(hpRatio, 0, 1), 5);
+  }
+
+  function startDuelSession(payload) {
+    const players = Array.isArray(payload.players) ? payload.players : [];
+    const me = players.find((entry) => entry.id === state.multiplayer.myId);
+    if (!me) return;
+
+    const mode = MATCH_MODE_CONFIG[payload.mode] ? payload.mode : "1v1";
+    const mapScale = Number(payload.mapScale) > 1 ? Number(payload.mapScale) : MATCH_MODE_CONFIG[mode].mapScale;
+
+    const player = state.player;
+    player.x = Number(me.spawnX) || WIDTH * 0.5;
+    player.y = Number(me.spawnY) || HEIGHT * 0.7;
+    player.maxHp = DUEL_MAX_HP;
+    player.hp = DUEL_MAX_HP;
+    player.fireCooldown = 0;
+    player.invuln = 0;
+    player.tempPower = 0;
+    player.tempRapid = 0;
+    player.tempSpread = 0;
+
+    state.activePlaneId = clamp(Number(me.planeId) || state.activePlaneId, 1, state.unlockedPlaneCount);
+    savePlaneProgress();
+    renderPlaneDock();
+    hideUpgradeSelection();
+    hideOverlay();
+
+    state.enemies = [];
+    state.enemyBullets = [];
+    state.bullets = [];
+    state.pickups = [];
+    state.boss = null;
+    state.stageCompleted = false;
+    state.pendingUpgrades = null;
+
+    const others = players
+      .filter((entry) => entry.id !== state.multiplayer.myId)
+      .map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        team: Number(entry.team) || 1,
+        planeId: Number(entry.planeId) || 1,
+        x: Number(entry.spawnX) || WIDTH * 0.5,
+        y: Number(entry.spawnY) || HEIGHT * 0.5,
+        angle: Number(entry.angle) || -Math.PI / 2,
+        hp: DUEL_MAX_HP,
+        alive: true,
+      }));
+
+    state.multiplayer.duel = {
+      active: true,
+      ended: false,
+      matchId: payload.matchId,
+      mode,
+      rewardCoins: Number(payload.rewardCoins) || MATCH_MODE_CONFIG[mode].reward,
+      targetPoints: Number(payload.targetPoints) || MATCH_TARGET_POINTS,
+      teamScores: {
+        1: Number(payload.teamScores?.[1]) || 0,
+        2: Number(payload.teamScores?.[2]) || 0,
+      },
+      mapScale,
+      worldWidth: WIDTH * mapScale,
+      worldHeight: HEIGHT * mapScale,
+      myTeam: Number(me.team) || 1,
+      localAlive: true,
+      others,
+      myBullets: [],
+      enemyBullets: [],
+      syncTimer: 0,
+      fireRateMs: clamp(145 * getActivePlane().fireRateMult, 70, 220),
+      damagePerShot: clamp(13 * getActivePlane().damageMult, 9, 44),
+    };
+
+    state.multiplayer.queueing = false;
+    state.running = true;
+
+    const firstEnemy = others.find((entry) => entry.team !== state.multiplayer.duel.myTeam) || others[0];
+    if (firstEnemy) {
+      setAimVector(firstEnemy.x - player.x, firstEnemy.y - player.y);
+    }
+    triggerStageTransition("MATCH START", `${mode.toUpperCase()} • Team ${state.multiplayer.duel.myTeam}`);
+    setMultiplayerStatus(`Match started: ${mode.toUpperCase()}`);
+  }
+
+  function endDuelSession(winnerTeam, reason = "") {
+    const duel = state.multiplayer.duel;
+    if (!duel || duel.ended) return;
+    duel.ended = true;
+    duel.active = false;
+
+    const iWon = Number(winnerTeam) === Number(duel.myTeam);
+    if (iWon) {
+      state.coins += duel.rewardCoins;
+      savePlaneProgress();
+      triggerStageTransition("YOU WIN", `You won ${duel.rewardCoins} coins!`);
+      showOverlay("Victory", `You won ${duel.rewardCoins} coins!`);
+    } else {
+      triggerStageTransition("DEFEAT", reason || "Better luck next duel");
+      showOverlay("Defeat", reason || "Your team lost this match.");
+    }
+
+    setTimeout(() => {
+      hideOverlay();
+      state.multiplayer.duel = null;
+      resetGame();
+    }, 1500);
+  }
+
+  function applyRoundReset(payload) {
+    const duel = state.multiplayer.duel;
+    if (!duel || duel.ended || payload.matchId !== duel.matchId) {
+      return;
+    }
+
+    duel.teamScores[1] = Number(payload.teamScores?.[1]) || duel.teamScores[1] || 0;
+    duel.teamScores[2] = Number(payload.teamScores?.[2]) || duel.teamScores[2] || 0;
+
+    if (Array.isArray(payload.players)) {
+      const me = payload.players.find((entry) => entry.id === state.multiplayer.myId);
+      if (me) {
+        state.player.x = Number(me.spawnX) || state.player.x;
+        state.player.y = Number(me.spawnY) || state.player.y;
+        state.player.hp = DUEL_MAX_HP;
+        duel.localAlive = true;
+      }
+
+      duel.others.forEach((remote) => {
+        const next = payload.players.find((entry) => entry.id === remote.id);
+        if (!next) return;
+        remote.x = Number(next.spawnX) || remote.x;
+        remote.y = Number(next.spawnY) || remote.y;
+        remote.hp = DUEL_MAX_HP;
+        remote.alive = true;
+      });
+    }
+
+    duel.myBullets = [];
+    duel.enemyBullets = [];
+    state.player.fireCooldown = 0;
+
+    const roundWinner = Number(payload.roundWinner) || 0;
+    triggerStageTransition(
+      roundWinner === duel.myTeam ? "ROUND WIN" : "ROUND LOST",
+      `Score ${duel.teamScores[duel.myTeam]}-${duel.teamScores[duel.myTeam === 1 ? 2 : 1]}`
+    );
+  }
+
+  function connectMultiplayer() {
+    if (state.multiplayer.connected || (state.multiplayer.socket && state.multiplayer.socket.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    const name = sanitizePlayerName(arenaDom.mpName?.value || "");
+    state.multiplayer.name = name;
+    if (arenaDom.mpName) {
+      arenaDom.mpName.value = name;
+    }
+
+    setMultiplayerStatus(`Connecting to ${MULTIPLAYER_WS_URL} ...`);
+    const socket = new WebSocket(MULTIPLAYER_WS_URL);
+    state.multiplayer.socket = socket;
+
+    socket.addEventListener("open", () => {
+      state.multiplayer.connected = true;
+      setMultiplayerStatus(`Connected as ${name}`);
+      sendMultiplayerMessage({ type: "hello", name });
+    });
+
+    socket.addEventListener("close", () => {
+      if (state.multiplayer.duel) {
+        endDuelSession(-1, "Disconnected from server");
+      }
+      state.multiplayer.connected = false;
+      state.multiplayer.socket = null;
+      state.multiplayer.myId = null;
+      state.multiplayer.queueing = false;
+      state.multiplayer.users = [];
+      state.multiplayer.incomingInvite = null;
+      renderMultiplayerUsers();
+      updateIncomingInviteUi();
+      setMultiplayerStatus("Offline", true);
+    });
+
+    socket.addEventListener("error", () => {
+      setMultiplayerStatus("Connection failed", true);
+    });
+
+    socket.addEventListener("message", (event) => {
+      let message = null;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (!message || typeof message !== "object") return;
+
+      if (message.type === "welcome") {
+        state.multiplayer.myId = message.id || null;
+        return;
+      }
+
+      if (message.type === "users") {
+        state.multiplayer.users = Array.isArray(message.users) ? message.users : [];
+        renderMultiplayerUsers();
+        return;
+      }
+
+      if (message.type === "queueStatus") {
+        state.multiplayer.queueing = Boolean(message.queueing);
+        const mode = String(message.mode || state.multiplayer.selectedMode || "1v1");
+        const waiting = Number(message.waiting || 0);
+        const needed = Number(message.needed || 0);
+        setMultiplayerStatus(state.multiplayer.queueing ? `Queue ${mode.toUpperCase()}: ${waiting}/${needed}` : "Queue stopped");
+        return;
+      }
+
+      if (message.type === "matchStart") {
+        startDuelSession(message);
+        return;
+      }
+
+      if (message.type === "roundUpdate") {
+        applyRoundReset(message);
+        return;
+      }
+
+      const duel = state.multiplayer.duel;
+      if (!duel || message.matchId !== duel.matchId) {
+        return;
+      }
+
+      if (message.type === "matchSync") {
+        const remote = duel.others.find((entry) => entry.id === message.playerId);
+        if (!remote) return;
+        remote.x = clamp(Number(message.x) || remote.x, 24, duel.worldWidth - 24);
+        remote.y = clamp(Number(message.y) || remote.y, 24, duel.worldHeight - 24);
+        remote.angle = Number(message.angle) || remote.angle;
+        remote.hp = clamp(Number(message.hp) || remote.hp, 0, DUEL_MAX_HP);
+        remote.alive = Boolean(message.alive);
+        return;
+      }
+
+      if (message.type === "matchFire") {
+        if (message.playerId === state.multiplayer.myId) return;
+        duel.enemyBullets.push({
+          ownerId: message.playerId,
+          x: Number(message.x) || 0,
+          y: Number(message.y) || 0,
+          vx: Math.cos(Number(message.angle) || 0) * DUEL_BULLET_SPEED,
+          vy: Math.sin(Number(message.angle) || 0) * DUEL_BULLET_SPEED,
+          life: DUEL_BULLET_LIFE,
+          damage: clamp(Number(message.damage) || 12, 4, 50),
+        });
+        return;
+      }
+
+      if (message.type === "matchHit") {
+        if (message.targetId === state.multiplayer.myId && duel.localAlive) {
+          state.player.hp = clamp(state.player.hp - clamp(Number(message.damage) || 0, 0, 90), 0, DUEL_MAX_HP);
+          if (state.player.hp <= 0) {
+            duel.localAlive = false;
+            sendMultiplayerMessage({
+              type: "playerDown",
+              matchId: duel.matchId,
+              playerId: state.multiplayer.myId,
+            });
+          }
+        } else {
+          const remote = duel.others.find((entry) => entry.id === message.targetId);
+          if (remote) {
+            remote.hp = clamp(remote.hp - clamp(Number(message.damage) || 0, 0, 90), 0, DUEL_MAX_HP);
+            if (remote.hp <= 0) {
+              remote.alive = false;
+            }
+          }
+        }
+        return;
+      }
+
+      if (message.type === "playerDown") {
+        if (message.playerId === state.multiplayer.myId) {
+          duel.localAlive = false;
+          state.player.hp = 0;
+          return;
+        }
+        const remote = duel.others.find((entry) => entry.id === message.playerId);
+        if (remote) {
+          remote.alive = false;
+          remote.hp = 0;
+        }
+        return;
+      }
+
+      if (message.type === "matchResult") {
+        endDuelSession(Number(message.winnerTeam) || -1, message.reason || "Match finished");
+      }
+    });
+  }
+
+  function toggleMatchQueue() {
+    if (!state.multiplayer.connected) {
+      setMultiplayerStatus("Connect first", true);
+      return;
+    }
+    if (state.multiplayer.duel) {
+      setMultiplayerStatus("Match already active", true);
+      return;
+    }
+
+    const selectedMode = arenaDom.mpMode?.value || "1v1";
+    state.multiplayer.selectedMode = MATCH_MODE_CONFIG[selectedMode] ? selectedMode : "1v1";
+    if (!state.multiplayer.queueing) {
+      const plane = getActivePlane();
+      sendMultiplayerMessage({
+        type: "queueJoin",
+        mode: state.multiplayer.selectedMode,
+        planeId: plane.id,
+      });
+      state.multiplayer.queueing = true;
+      setMultiplayerStatus(`Searching ${state.multiplayer.selectedMode.toUpperCase()}...`);
+      return;
+    }
+
+    sendMultiplayerMessage({ type: "queueLeave" });
+    state.multiplayer.queueing = false;
+    setMultiplayerStatus("Queue cancelled");
+  }
+
+  function updateDuel(dt, dtFactor) {
+    const duel = state.multiplayer.duel;
+    if (!duel || duel.ended) {
+      return;
+    }
+
+    const player = state.player;
+    const plane = getActivePlane();
+    player.fireCooldown -= dt;
+
+    let moveX = 0;
+    let moveY = 0;
+    if (keys.has("w") || keys.has("arrowup")) moveY -= 1;
+    if (keys.has("s") || keys.has("arrowdown")) moveY += 1;
+    if (keys.has("a") || keys.has("arrowleft")) moveX -= 1;
+    if (keys.has("d") || keys.has("arrowright")) moveX += 1;
+    moveX += gamepadInput.moveX;
+    moveY += gamepadInput.moveY;
+
+    if (touchInput.active) {
+      const dx = touchInput.targetX - player.x;
+      const dy = touchInput.targetY - player.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 10) {
+        moveX += dx / dist;
+        moveY += dy / dist;
+      }
+    }
+
+    const norm = Math.hypot(moveX, moveY) || 1;
+    if (duel.localAlive) {
+      const duelSpeed = Math.min(MAX_EFFECTIVE_MOVE_SPEED, player.speed * plane.speedMult);
+      player.x += (moveX / norm) * duelSpeed * dtFactor;
+      player.y += (moveY / norm) * duelSpeed * dtFactor;
+      player.x = clamp(player.x, 24, duel.worldWidth - 24);
+      player.y = clamp(player.y, 24, duel.worldHeight - 24);
+    }
+
+    const aliveEnemies = duel.others.filter((entry) => entry.alive && entry.team !== duel.myTeam);
+    if (aliveEnemies.length > 0 && duel.localAlive) {
+      let nearest = aliveEnemies[0];
+      let nearestDist = Infinity;
+      aliveEnemies.forEach((enemy) => {
+        const dist = distance(player.x, player.y, enemy.x, enemy.y);
+        if (dist < nearestDist) {
+          nearest = enemy;
+          nearestDist = dist;
+        }
+      });
+      setAimVector(nearest.x - player.x, nearest.y - player.y);
+    }
+
+    if (duel.localAlive && player.fireCooldown <= 0 && aliveEnemies.length > 0) {
+      const shotAngle = aim.angle;
+      duel.myBullets.push({
+        ownerId: state.multiplayer.myId,
+        x: player.x,
+        y: player.y,
+        vx: Math.cos(shotAngle) * DUEL_BULLET_SPEED,
+        vy: Math.sin(shotAngle) * DUEL_BULLET_SPEED,
+        life: DUEL_BULLET_LIFE,
+        damage: duel.damagePerShot,
+      });
+      sendMultiplayerMessage({
+        type: "matchFire",
+        matchId: duel.matchId,
+        playerId: state.multiplayer.myId,
+        x: player.x,
+        y: player.y,
+        angle: shotAngle,
+        damage: duel.damagePerShot,
+      });
+      player.fireCooldown = duel.fireRateMs;
+    }
+
+    duel.myBullets = duel.myBullets.filter((bullet) => {
+      bullet.x += bullet.vx * dtFactor;
+      bullet.y += bullet.vy * dtFactor;
+      bullet.life -= dtFactor;
+      if (bullet.life <= 0) return false;
+      if (bullet.x < -40 || bullet.x > duel.worldWidth + 40 || bullet.y < -40 || bullet.y > duel.worldHeight + 40) return false;
+
+      for (const remote of duel.others) {
+        if (!remote.alive || remote.team === duel.myTeam) continue;
+        if (distance(bullet.x, bullet.y, remote.x, remote.y) <= 18) {
+          remote.hp = clamp(remote.hp - bullet.damage, 0, DUEL_MAX_HP);
+          if (remote.hp <= 0) {
+            remote.alive = false;
+          }
+          sendMultiplayerMessage({
+            type: "matchHit",
+            matchId: duel.matchId,
+            targetId: remote.id,
+            damage: bullet.damage,
+          });
+          return false;
+        }
+      }
+      return true;
+    });
+
+    duel.enemyBullets = duel.enemyBullets.filter((bullet) => {
+      bullet.x += bullet.vx * dtFactor;
+      bullet.y += bullet.vy * dtFactor;
+      bullet.life -= dtFactor;
+      if (bullet.life <= 0) return false;
+      if (bullet.x < -40 || bullet.x > duel.worldWidth + 40 || bullet.y < -40 || bullet.y > duel.worldHeight + 40) return false;
+      const owner = duel.others.find((entry) => entry.id === bullet.ownerId);
+      if (!owner || !owner.alive || owner.team === duel.myTeam) {
+        return false;
+      }
+      if (duel.localAlive && distance(bullet.x, bullet.y, player.x, player.y) <= player.radius + 2) {
+        player.hp = clamp(player.hp - bullet.damage, 0, DUEL_MAX_HP);
+        if (player.hp <= 0) {
+          duel.localAlive = false;
+          sendMultiplayerMessage({
+            type: "playerDown",
+            matchId: duel.matchId,
+            playerId: state.multiplayer.myId,
+          });
+        }
+        return false;
+      }
+      return true;
+    });
+
+    duel.syncTimer -= dt;
+    if (duel.syncTimer <= 0) {
+      duel.syncTimer = DUEL_SYNC_INTERVAL_MS;
+      sendMultiplayerMessage({
+        type: "matchSync",
+        matchId: duel.matchId,
+        playerId: state.multiplayer.myId,
+        x: player.x,
+        y: player.y,
+        hp: player.hp,
+        angle: aim.angle,
+        alive: duel.localAlive,
+      });
+    }
+
+    const aliveTeammates = duel.others.filter((entry) => entry.team === duel.myTeam && entry.alive);
+    const aliveOpponents = duel.others.filter((entry) => entry.team !== duel.myTeam && entry.alive);
+    const myTeamAlive = duel.localAlive || aliveTeammates.length > 0;
+    if (!myTeamAlive || aliveOpponents.length === 0) {
+      // server decides round winners and score progression
+    }
+  }
+
+  function drawDuelMode() {
+    const duel = state.multiplayer.duel;
+    if (!duel) return;
+
+    const camX = clamp(state.player.x - WIDTH * 0.5, 0, Math.max(0, duel.worldWidth - WIDTH));
+    const camY = clamp(state.player.y - HEIGHT * 0.5, 0, Math.max(0, duel.worldHeight - HEIGHT));
+
+    ctx.save();
+    ctx.translate(-camX, -camY);
+
+    ctx.strokeStyle = "rgba(143, 219, 255, 0.35)";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(2, 2, duel.worldWidth - 4, duel.worldHeight - 4);
+
+    duel.myBullets.forEach((bullet) => {
+      ctx.fillStyle = "#96ffd9";
+      ctx.beginPath();
+      ctx.arc(bullet.x, bullet.y, 2.6, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    duel.enemyBullets.forEach((bullet) => {
+      ctx.fillStyle = "#ff9b8a";
+      ctx.beginPath();
+      ctx.arc(bullet.x, bullet.y, 2.6, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    duel.others.forEach((remote) => {
+      if (!remote.alive) return;
+      drawRemoteDuelPlane(remote.x, remote.y, remote.angle, remote.planeId, remote.hp / DUEL_MAX_HP);
+      ctx.fillStyle = remote.team === duel.myTeam ? "rgba(115, 255, 166, 0.92)" : "rgba(255, 158, 138, 0.92)";
+      ctx.font = "600 10px Rubik";
+      ctx.textAlign = "center";
+      ctx.fillText(remote.name, remote.x, remote.y - 38);
+    });
+
+    if (duel.localAlive) {
+      drawPlayerPlane();
+      drawCrosshair();
+    } else {
+      ctx.fillStyle = "rgba(255,90,90,0.55)";
+      ctx.beginPath();
+      ctx.arc(state.player.x, state.player.y, 22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+
+    const allyAlive = (duel.localAlive ? 1 : 0) + duel.others.filter((entry) => entry.team === duel.myTeam && entry.alive).length;
+    const enemyAlive = duel.others.filter((entry) => entry.team !== duel.myTeam && entry.alive).length;
+    const myScore = duel.teamScores[duel.myTeam] || 0;
+    const enemyTeam = duel.myTeam === 1 ? 2 : 1;
+    const enemyScore = duel.teamScores[enemyTeam] || 0;
+
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.font = "700 14px Rubik";
+    ctx.textAlign = "left";
+    ctx.fillText(`MATCH ${duel.mode.toUpperCase()} • Team ${duel.myTeam}`, 16, 22);
+    ctx.font = "600 12px Rubik";
+    ctx.fillText(`Allies alive: ${allyAlive} | Enemies alive: ${enemyAlive}`, 16, 40);
+    ctx.textAlign = "center";
+    ctx.font = "800 18px Rubik";
+    ctx.fillStyle = "rgba(225,245,255,0.96)";
+    ctx.fillText(`TEAM ${duel.myTeam}: ${myScore}   |   TEAM ${enemyTeam}: ${enemyScore}   (First to ${duel.targetPoints})`, WIDTH * 0.5, 24);
+
+    const leftX = 16;
+    const rightX = WIDTH - 216;
+    const topY = 48;
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.fillRect(leftX, topY, 200, 10);
+    ctx.fillRect(rightX, topY, 200, 10);
+    ctx.fillStyle = "#89ff80";
+    ctx.fillRect(leftX, topY, 200 * clamp(state.player.hp / DUEL_MAX_HP, 0, 1), 10);
+
+    const enemyAvgHp = (() => {
+      const enemies = duel.others.filter((entry) => entry.team !== duel.myTeam && entry.alive);
+      if (enemies.length === 0) return 0;
+      return enemies.reduce((sum, entry) => sum + entry.hp, 0) / (enemies.length * DUEL_MAX_HP);
+    })();
+
+    ctx.fillStyle = "#ff8d74";
+    ctx.fillRect(rightX, topY, 200 * clamp(enemyAvgHp, 0, 1), 10);
+  }
+
   function getActivePlane() {
     return state.planes[Math.max(0, state.activePlaneId - 1)] || state.planes[0];
   }
@@ -1724,7 +2474,7 @@ if (arenaDom.canvas) {
 
     const activePlane = getActivePlane();
     const nextUnlock = Math.min(MAX_PLANES, state.unlockedPlaneCount + 1);
-    arenaDom.planeActive.textContent = `מטוס פעיל: ${activePlane.id} • ${activePlane.title}`;
+    arenaDom.planeActive.textContent = `מטוס פעיל: #${activePlane.id} • ${activePlane.title}`;
 
     const fragment = document.createDocumentFragment();
     for (let planeId = 1; planeId <= MAX_PLANES; planeId += 1) {
@@ -1741,10 +2491,32 @@ if (arenaDom.canvas) {
       }
       button.dataset.planeId = String(planeId);
       if (unlocked) {
-        button.textContent = `#${planeId} ${plane.title}`;
+        const rapid = `${Math.round((1 / plane.fireRateMult) * 100)}% ROF`;
+        const power = `${Math.round(plane.damageMult * 100)}% DMG`;
+        const speed = `${Math.round(plane.speedMult * 100)}% SPD`;
+        const swatch = `linear-gradient(120deg, ${plane.primary}, ${plane.secondary})`;
+        const glow = plane.glow.replace("0.75", "0.9");
+        button.innerHTML = `
+          <span class="plane-item-top">
+            <span class="plane-item-id">#${planeId}</span>
+            <span class="plane-item-type">${plane.title}</span>
+          </span>
+          <span class="plane-item-preview" style="--plane-fill:${swatch};--plane-glow:${glow};--plane-trim:${plane.trim};--plane-canopy:${plane.canopy};"></span>
+          <span class="plane-item-stats">
+            <span class="plane-stat">${power}</span>
+            <span class="plane-stat">${rapid}</span>
+            <span class="plane-stat">${speed}</span>
+          </span>
+        `;
         button.disabled = false;
       } else {
-        button.textContent = `🔒 #${planeId} | מחיר: ${planeId}🪙`;
+        button.innerHTML = `
+          <span class="plane-item-top">
+            <span class="plane-item-id">#${planeId}</span>
+            <span class="plane-item-type">LOCKED</span>
+          </span>
+          <span class="plane-item-locked">🔒 מחיר: ${planeId}🪙</span>
+        `;
         const canBuyNow = state.creatorMode || planeId === nextUnlock;
         button.disabled = !canBuyNow;
       }
@@ -1790,16 +2562,19 @@ if (arenaDom.canvas) {
   function updateHud() {
     const player = state.player;
     const plane = getActivePlane();
+    const duel = state.multiplayer.duel;
 
     arenaDom.score.textContent = Math.floor(state.score);
     arenaDom.health.textContent = Math.max(0, Math.floor(player.hp));
-    arenaDom.wave.textContent = state.stage;
+    arenaDom.wave.textContent = duel ? duel.mode.toUpperCase() : state.stage;
     if (arenaDom.coins) {
       arenaDom.coins.textContent = `🪙 מטבעות: ${Math.floor(state.coins)}`;
     }
 
     const spreadBonus = player.tempSpread > 0 ? " +Spread" : "";
-    arenaDom.weapon.textContent = `P${plane.id} • Cannon x${player.shotCount + plane.shotBonus}${spreadBonus}`;
+    arenaDom.weapon.textContent = duel
+      ? `P${plane.id} • Duel Cannon`
+      : `P${plane.id} • Cannon x${player.shotCount + plane.shotBonus}${spreadBonus}`;
     arenaDom.dash.textContent = player.dashCooldown <= 0 ? "Ready" : `${(player.dashCooldown / 1000).toFixed(1)}s`;
     arenaDom.pulse.textContent = player.pulseCooldown <= 0 ? "Ready" : `${(player.pulseCooldown / 1000).toFixed(1)}s`;
   }
@@ -1810,21 +2585,23 @@ if (arenaDom.canvas) {
 
   function getEnemyStageScaling(stage) {
     const stageProgress = Math.max(0, stage - 1);
-    const stageMultiplier = 1.1 ** stageProgress;
+    const hpMultiplier = 1.2 ** stageProgress;
+    const damageMultiplier = 1.2 ** stageProgress;
+    const speedMultiplier = 1.01 ** stageProgress;
     const smallEnemyDamageMultiplier = 0.35;
     return {
-      hp: stageMultiplier,
-      speed: 1,
-      damage: stageMultiplier * smallEnemyDamageMultiplier,
+      hp: hpMultiplier,
+      speed: speedMultiplier,
+      damage: damageMultiplier * smallEnemyDamageMultiplier,
       fireCooldown: 1,
-      contactDamage: (18 + stage * 1.3) * stageMultiplier * smallEnemyDamageMultiplier,
+      contactDamage: (18 + stage * 1.3) * damageMultiplier * smallEnemyDamageMultiplier,
     };
   }
 
   function getBossStageScaling(stage, bossTier) {
-    const tierProgress = Math.max(0, bossTier - 1);
-    const hpMultiplier = 3 ** tierProgress;
-    const damageMultiplier = 2 ** tierProgress;
+    const bossProgress = Math.max(0, bossTier - 1);
+    const hpMultiplier = 2 ** bossProgress;
+    const damageMultiplier = 1.5 ** bossProgress;
     return {
       hp: hpMultiplier,
       damage: damageMultiplier,
@@ -1911,6 +2688,7 @@ if (arenaDom.canvas) {
     state.particles = [];
     state.pickups = [];
     state.availableUpgrades = [];
+    state.pendingUpgrades = null;
     state.servants = [];
     enforceCreatorModePlanes();
     state.unlockedPlaneCount = state.creatorMode ? MAX_PLANES : clamp(state.unlockedPlaneCount, 1, MAX_PLANES);
@@ -1949,6 +2727,7 @@ if (arenaDom.canvas) {
     resetStageProgress();
     hideOverlay();
     hideUpgradeSelection();
+    triggerStageTransition(`STAGE ${state.stage}`, getTheme().name);
     renderPlaneDock();
     savePlaneProgress();
     updateHud();
@@ -1968,7 +2747,7 @@ if (arenaDom.canvas) {
     const seed = Math.random() * 9999;
     const scaling = getEnemyStageScaling(state.stage);
     const hp = type.hp(state.stage) * scaling.hp;
-    const speed = type.speed(1) * scaling.speed;
+    const speed = type.speed(state.stage) * scaling.speed;
 
     state.enemies.push({
       type: typeKey,
@@ -2072,8 +2851,9 @@ if (arenaDom.canvas) {
     const plane = getActivePlane();
 
     const angle = aim.angle;
-    player.x += Math.cos(angle) * player.dashPower * 8 * plane.dashMult;
-    player.y += Math.sin(angle) * player.dashPower * 8 * plane.dashMult;
+    const dashDistance = Math.min(MAX_DASH_DISTANCE, player.dashPower * 8 * plane.dashMult);
+    player.x += Math.cos(angle) * dashDistance;
+    player.y += Math.sin(angle) * dashDistance;
     player.x = clamp(player.x, 26, WIDTH - 26);
     player.y = clamp(player.y, 26, HEIGHT - 26);
 
@@ -2308,6 +3088,33 @@ if (arenaDom.canvas) {
       return;
     }
 
+    if (boss.dying) {
+      boss.phase += 0.025 * dtFactor;
+      boss.deathTimer -= dt;
+      const deathProgress = clamp(1 - boss.deathTimer / Math.max(1, boss.deathDuration), 0, 1);
+      const burstCount = 1 + Math.floor(deathProgress * 5);
+      for (let burst = 0; burst < burstCount; burst += 1) {
+        if (Math.random() < 0.42) {
+          const ring = boss.radius * (0.25 + Math.random() * (0.65 + deathProgress * 0.25));
+          const theta = Math.random() * Math.PI * 2;
+          addParticles(
+            boss.x + Math.cos(theta) * ring,
+            boss.y + Math.sin(theta) * ring,
+            Math.random() < 0.5 ? boss.variant.secondary : "#ffe3a6",
+            3 + Math.floor(Math.random() * 4),
+            1.6 + deathProgress * 1.8
+          );
+        }
+      }
+
+      if (boss.deathTimer <= 0) {
+        addParticles(boss.x, boss.y, "#fff2bf", 52, 4.1);
+        state.boss = null;
+        state.stageDefeated = state.stageGoal;
+      }
+      return;
+    }
+
     const player = state.player;
 
     boss.phase += 0.01 * dtFactor;
@@ -2426,22 +3233,25 @@ if (arenaDom.canvas) {
   function startNextStage() {
     state.stage += 1;
     state.running = true;
+    state.pendingUpgrades = null;
     hideUpgradeSelection();
     initPlanetsForStage();
     resetStageProgress();
     applyPlaneStartingLoadout();
     syncPlaneUnlocks();
-    showOverlay(`Stage ${state.stage}`, `נכנסת ל-${getTheme().name}`);
-    setTimeout(() => {
-      hideOverlay();
-    }, 900);
+    triggerStageTransition(`STAGE ${state.stage}`, getTheme().name);
   }
 
   function completeStage() {
     if (state.stageCompleted) return;
     state.stageCompleted = true;
     const upgrades = buildUpgradeOptions();
-    showUpgradeSelection(upgrades);
+    state.running = false;
+    state.pendingUpgrades = upgrades;
+    const subtitle = state.isBossStage
+      ? `Boss ${getBossTier(state.stage)} Defeated`
+      : `Stage ${state.stage} Cleared`;
+    triggerStageTransition("YOU WIN", subtitle);
   }
 
   function playerTakeDamage(amount) {
@@ -2471,6 +3281,8 @@ if (arenaDom.canvas) {
     const player = state.player;
     const plane = getActivePlane();
 
+    readGamepadInput();
+
     if (player.fireCooldown > 0) player.fireCooldown -= dt;
     if (player.dashCooldown > 0) player.dashCooldown -= dt;
     if (player.pulseCooldown > 0) player.pulseCooldown -= dt;
@@ -2479,6 +3291,9 @@ if (arenaDom.canvas) {
     if (player.tempRapid > 0) player.tempRapid -= dt;
     if (player.tempSpread > 0) player.tempSpread -= dt;
     if (player.tempPower > 0) player.tempPower -= dt;
+    if (state.stageTransitionMs > 0) {
+      state.stageTransitionMs = Math.max(0, state.stageTransitionMs - dt);
+    }
 
     if (state.running && player.hp > 0) {
       player.hp = Math.min(player.maxHp, player.hp + plane.regenPerSecond * (dt / 1000));
@@ -2493,12 +3308,21 @@ if (arenaDom.canvas) {
     });
     updateSkyTraffic(dtFactor);
 
-    if (!state.running) {
+    if (state.multiplayer.duel && state.multiplayer.duel.active) {
+      updateDuel(dt, dtFactor);
       updateHud();
       return;
     }
 
-    readGamepadInput();
+    if (!state.running) {
+      if (state.pendingUpgrades && state.stageTransitionMs <= 0) {
+        const queuedUpgrades = state.pendingUpgrades;
+        state.pendingUpgrades = null;
+        showUpgradeSelection(queuedUpgrades);
+      }
+      updateHud();
+      return;
+    }
 
     let moveX = 0;
     let moveY = 0;
@@ -2524,8 +3348,9 @@ if (arenaDom.canvas) {
     updateServants(dt);
 
     const norm = Math.hypot(moveX, moveY) || 1;
-    player.x += (moveX / norm) * player.speed * plane.speedMult * dtFactor;
-    player.y += (moveY / norm) * player.speed * plane.speedMult * dtFactor;
+    const effectiveMoveSpeed = Math.min(MAX_EFFECTIVE_MOVE_SPEED, player.speed * plane.speedMult);
+    player.x += (moveX / norm) * effectiveMoveSpeed * dtFactor;
+    player.y += (moveY / norm) * effectiveMoveSpeed * dtFactor;
     player.x = clamp(player.x, 24, WIDTH - 24);
     player.y = clamp(player.y, 24, HEIGHT - 24);
 
@@ -2622,7 +3447,7 @@ if (arenaDom.canvas) {
         }
       }
 
-      if (state.boss && bullet.life > 0) {
+      if (state.boss && !state.boss.dying && bullet.life > 0) {
         if (distance(bullet.x, bullet.y, state.boss.x, state.boss.y) <= state.boss.radius + bullet.radius) {
           state.boss.hp -= bullet.damage;
           bullet.life = 0;
@@ -2649,12 +3474,17 @@ if (arenaDom.canvas) {
       state.score += defeatedThisTick * 4;
     }
 
-    if (state.boss && state.boss.hp <= 0) {
+    if (state.boss && !state.boss.dying && state.boss.hp <= 0) {
       state.score += 650 + state.stage * 40;
       state.coins += 5;
       addParticles(state.boss.x, state.boss.y, "#ffe099", 48, 3.5);
-      state.boss = null;
-      state.stageDefeated = state.stageGoal;
+      state.enemyBullets = [];
+      state.boss.hp = 0;
+      state.boss.dying = true;
+      state.boss.deathDuration = BOSS_DEATH_DURATION_MS;
+      state.boss.deathTimer = BOSS_DEATH_DURATION_MS;
+      state.boss.laser.mode = "idle";
+      state.boss.laser.timer = 99999;
     }
 
     state.enemyBullets.forEach((bullet) => {
@@ -2704,7 +3534,7 @@ if (arenaDom.canvas) {
       }
     });
 
-    if (state.boss) {
+    if (state.boss && !state.boss.dying) {
       if (distance(state.boss.x, state.boss.y, player.x, player.y) <= state.boss.radius + player.radius) {
         if (state.bossContactTick <= 0) {
           playerTakeDamage(state.boss.contactDamage || 28);
@@ -2845,8 +3675,16 @@ if (arenaDom.canvas) {
     const player = state.player;
     const angle = aim.angle;
     const plane = getActivePlane();
+    const visual = plane.visual;
     const wingSpan = 13 * plane.wingScale;
-    const bodyTail = 24 + plane.id * 0.03;
+    const bodyTail = 23 + plane.id * 0.03;
+    const now = performance.now();
+    const thrusterPulse = 1 + Math.sin(now * 0.02 + plane.id * 0.09) * 0.26;
+    const glowPulse = 1 + Math.sin(now * 0.012 + plane.id * 0.13) * 0.18;
+    const wingFront = wingSpan * (0.62 + visual.wingType * 0.07);
+    const wingRear = wingSpan * (0.88 + visual.wingDepth * 0.018);
+    const noseLen = visual.noseLength;
+    const wingInset = visual.wingInset;
 
     ctx.save();
     ctx.translate(player.x, player.y);
@@ -2856,32 +3694,144 @@ if (arenaDom.canvas) {
     ctx.globalAlpha = alpha;
 
     ctx.shadowColor = plane.glow;
-    ctx.shadowBlur = 10 + Math.min(18, plane.id * 0.18);
-    ctx.fillStyle = plane.primary;
+    ctx.shadowBlur = 10 + Math.min(20, plane.id * 0.16) + visual.glowBoost * glowPulse;
+
+    const hullGradient = ctx.createLinearGradient(0, -noseLen, 0, bodyTail + 4);
+    hullGradient.addColorStop(0, plane.secondary);
+    hullGradient.addColorStop(0.38, plane.primary);
+    hullGradient.addColorStop(1, "#0b111d");
+    ctx.fillStyle = hullGradient;
 
     ctx.beginPath();
-    ctx.moveTo(0, -24);
-    ctx.lineTo(wingSpan, 12);
-    ctx.lineTo(4, 8);
+    ctx.moveTo(0, -noseLen);
+    ctx.lineTo(wingFront, 4 + visual.wingType * 1.2);
+    ctx.lineTo(wingRear, 9 + visual.wingDepth * 0.6);
+    ctx.lineTo(wingInset + 3, 8);
     ctx.lineTo(4, bodyTail);
     ctx.lineTo(-4, bodyTail);
-    ctx.lineTo(-4, 8);
-    ctx.lineTo(-wingSpan, 12);
+    ctx.lineTo(-(wingInset + 3), 8);
+    ctx.lineTo(-wingRear, 9 + visual.wingDepth * 0.6);
+    ctx.lineTo(-wingFront, 4 + visual.wingType * 1.2);
     ctx.closePath();
     ctx.fill();
 
     ctx.shadowBlur = 0;
-    ctx.fillStyle = plane.secondary;
-    ctx.fillRect(-4, -6, 8, 18);
+    ctx.fillStyle = plane.trim;
+    if (visual.finType === 0) {
+      ctx.fillRect(-4, -8, 8, 22);
+    } else if (visual.finType === 1) {
+      ctx.beginPath();
+      ctx.moveTo(0, -10);
+      ctx.lineTo(6, 12);
+      ctx.lineTo(0, 18);
+      ctx.lineTo(-6, 12);
+      ctx.closePath();
+      ctx.fill();
+    } else if (visual.finType === 2) {
+      ctx.beginPath();
+      ctx.moveTo(0, -8);
+      ctx.lineTo(5, 3);
+      ctx.lineTo(5, 20);
+      ctx.lineTo(-5, 20);
+      ctx.lineTo(-5, 3);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.fillRect(-3.2, -10, 6.4, 24);
+      ctx.fillRect(-8.5, 2, 17, 4.4);
+    }
 
-    const flame = 6 + Math.sin(performance.now() * 0.04) * 3;
-    ctx.fillStyle = "#8de1ff";
+    ctx.fillStyle = plane.canopy;
+    if (visual.canopyType === 0) {
+      ctx.beginPath();
+      ctx.ellipse(0, -2, 3.8, 8.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (visual.canopyType === 1) {
+      ctx.beginPath();
+      ctx.moveTo(0, -11);
+      ctx.lineTo(5, -1);
+      ctx.lineTo(3.5, 7);
+      ctx.lineTo(-3.5, 7);
+      ctx.lineTo(-5, -1);
+      ctx.closePath();
+      ctx.fill();
+    } else if (visual.canopyType === 2) {
+      ctx.beginPath();
+      ctx.roundRect(-4.4, -10, 8.8, 16, 3.3);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(0, -12);
+      ctx.lineTo(4.5, -3);
+      ctx.lineTo(4.5, 8);
+      ctx.lineTo(-4.5, 8);
+      ctx.lineTo(-4.5, -3);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = Math.min(1, alpha * visual.stripeAlpha + 0.15);
+    ctx.fillStyle = plane.secondary;
+    if (visual.stripeType === 0) {
+      ctx.fillRect(-1.2, -noseLen + 4, 2.4, bodyTail + noseLen - 10);
+    } else if (visual.stripeType === 1) {
+      ctx.fillRect(-wingRear + 3, 10, wingRear * 2 - 6, 2.8);
+      ctx.fillRect(-wingRear + 8, 15, wingRear * 2 - 16, 2.2);
+    } else if (visual.stripeType === 2) {
+      ctx.beginPath();
+      ctx.moveTo(-6, -5);
+      ctx.lineTo(0, -14);
+      ctx.lineTo(6, -5);
+      ctx.lineTo(3, 8);
+      ctx.lineTo(-3, 8);
+      ctx.closePath();
+      ctx.fill();
+    } else if (visual.stripeType === 3) {
+      ctx.fillRect(-8, 2, 16, 3);
+      ctx.fillRect(-6.5, 8, 13, 2.5);
+      ctx.fillRect(-4.5, 13, 9, 2.2);
+    } else if (visual.stripeType === 4) {
+      ctx.beginPath();
+      ctx.arc(0, 2, 4.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(0, 11.5, 3.1, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(-2.1, -8, 4.2, 20);
+      ctx.fillRect(-wingFront + 4, 8, 5, 2.5);
+      ctx.fillRect(wingFront - 9, 8, 5, 2.5);
+    }
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = plane.engine;
+    const enginePods = Math.min(3, visual.enginePods);
+    const podSpacing = 6;
+    for (let podIndex = 0; podIndex < enginePods; podIndex += 1) {
+      const centerOffset = (podIndex - (enginePods - 1) / 2) * podSpacing;
+      const flame = (6 + Math.sin(now * 0.05 + podIndex * 1.4) * 2.4) * thrusterPulse;
+      ctx.beginPath();
+      ctx.moveTo(centerOffset, 24 + flame);
+      ctx.lineTo(centerOffset + 2.8, 16.5);
+      ctx.lineTo(centerOffset - 2.8, 16.5);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.globalAlpha = Math.max(0.22, alpha * 0.45);
+      ctx.fillStyle = plane.contrail;
+      ctx.beginPath();
+      ctx.ellipse(centerOffset, 29 + flame * 0.8, 2.5, 7.5 + flame * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = plane.engine;
+    }
+
+    ctx.strokeStyle = "rgba(255,255,255,0.45)";
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.moveTo(0, 23 + flame);
-    ctx.lineTo(4, 17);
-    ctx.lineTo(-4, 17);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(0, -noseLen + 3);
+    ctx.lineTo(0, -noseLen + 9);
+    ctx.stroke();
 
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -2953,7 +3903,7 @@ if (arenaDom.canvas) {
 
       ctx.shadowColor = servantState.isBig ? plane.glow : "rgba(180, 255, 215, 0.55)";
       ctx.shadowBlur = 8;
-      ctx.fillStyle = servantState.isBig ? plane.secondary : "#8de1ff";
+      ctx.fillStyle = servantState.isBig ? plane.secondary : plane.canopy;
 
       ctx.beginPath();
       ctx.moveTo(0, -18);
@@ -2967,8 +3917,13 @@ if (arenaDom.canvas) {
       ctx.fill();
 
       ctx.shadowBlur = 0;
-      ctx.fillStyle = "rgba(255,255,255,0.6)";
+      ctx.fillStyle = servantState.isBig ? plane.trim : plane.engine;
       ctx.fillRect(-2, -4, 4, 10);
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = plane.contrail;
+      ctx.beginPath();
+      ctx.ellipse(0, 20, 2.6, 5.8, 0, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
   }
@@ -2976,14 +3931,20 @@ if (arenaDom.canvas) {
   function drawEnemyPlane(enemy) {
     const config = ENEMY_TYPES[enemy.type];
     const angle = Math.atan2(state.player.y - enemy.y, state.player.x - enemy.x);
+    const hpRatio = clamp(enemy.hp / Math.max(1, enemy.maxHp), 0, 1);
 
     ctx.save();
     ctx.translate(enemy.x, enemy.y);
     ctx.rotate(angle + Math.PI / 2);
 
-    ctx.shadowColor = `${config.color}88`;
-    ctx.shadowBlur = 10;
-    ctx.fillStyle = config.color;
+    const hullGradient = ctx.createLinearGradient(0, -24, 0, 22);
+    hullGradient.addColorStop(0, "#ffffff");
+    hullGradient.addColorStop(0.26, config.color);
+    hullGradient.addColorStop(1, "#101620");
+
+    ctx.shadowColor = `${config.color}cc`;
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = hullGradient;
 
     if (enemy.type === "bomber") {
       ctx.beginPath();
@@ -3025,17 +3986,47 @@ if (arenaDom.canvas) {
     }
 
     ctx.fill();
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = "rgba(255,255,255,0.6)";
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(0, -2, 4.2, 8.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(172, 238, 255, 0.9)";
+    ctx.beginPath();
+    ctx.ellipse(0, -4.2, 2.3, 4.9, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const thrusterGlow = 0.75 + Math.sin(performance.now() * 0.02 + enemy.phase) * 0.25;
+    ctx.shadowColor = "rgba(130,230,255,0.9)";
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = `rgba(120,220,255,${0.65 + thrusterGlow * 0.25})`;
+    ctx.fillRect(-3.2, 18.4, 2.4, 8.8 * thrusterGlow);
+    ctx.fillRect(0.8, 18.4, 2.4, 8.8 * thrusterGlow);
+
     ctx.shadowBlur = 0;
 
-    ctx.fillStyle = "rgba(0,0,0,0.25)";
-    ctx.fillRect(-3, -4, 6, 10);
     ctx.restore();
 
-    const hpRatio = enemy.hp / enemy.maxHp;
-    ctx.fillStyle = "rgba(0,0,0,0.35)";
-    ctx.fillRect(enemy.x - 16, enemy.y - enemy.radius - 11, 32, 4);
-    ctx.fillStyle = "#8cff1a";
-    ctx.fillRect(enemy.x - 16, enemy.y - enemy.radius - 11, 32 * hpRatio, 4);
+    const barWidth = 36;
+    const barHeight = 5;
+    const barX = enemy.x - barWidth / 2;
+    const barY = enemy.y - enemy.radius - 13;
+    const hpGradient = ctx.createLinearGradient(barX, barY, barX + barWidth, barY);
+    hpGradient.addColorStop(0, "#ff6f6f");
+    hpGradient.addColorStop(0.45, "#ffd66b");
+    hpGradient.addColorStop(1, "#8cff8b");
+
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+    ctx.fillStyle = hpGradient;
+    ctx.fillRect(barX, barY, barWidth * hpRatio, barHeight);
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barWidth, barHeight);
   }
 
   function drawBoss() {
@@ -3047,18 +4038,84 @@ if (arenaDom.canvas) {
     const variant = boss.variant;
     const now = performance.now();
     const bodyRadius = variant.radius;
+
+    if (boss.dying) {
+      const deathProgress = clamp(1 - boss.deathTimer / Math.max(1, boss.deathDuration), 0, 1);
+      const fade = 1 - deathProgress;
+      const coreRadius = bodyRadius * (1 + deathProgress * 0.7);
+
+      ctx.save();
+      ctx.globalAlpha = fade;
+      const blast = ctx.createRadialGradient(
+        boss.x,
+        boss.y,
+        bodyRadius * 0.15,
+        boss.x,
+        boss.y,
+        bodyRadius * (1.6 + deathProgress * 1.4)
+      );
+      blast.addColorStop(0, "rgba(255,255,255,0.98)");
+      blast.addColorStop(0.28, "rgba(255,224,168,0.85)");
+      blast.addColorStop(0.62, "rgba(255,148,96,0.52)");
+      blast.addColorStop(1, "rgba(255,120,90,0)");
+      ctx.fillStyle = blast;
+      ctx.beginPath();
+      ctx.arc(boss.x, boss.y, bodyRadius * (1.4 + deathProgress * 1.2), 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = `rgba(255,235,180,${0.8 * fade})`;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(boss.x, boss.y, coreRadius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = `rgba(255,245,215,${0.88 * fade})`;
+      ctx.beginPath();
+      ctx.arc(boss.x, boss.y, bodyRadius * (0.3 + deathProgress * 0.24), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+
     const pulse = 1 + Math.sin(now * 0.005) * 0.05;
+    const glowPulse = 0.72 + Math.sin(now * 0.008) * 0.28;
+    const wingPulse = 0.68 + Math.sin(now * 0.011 + boss.phase) * 0.32;
+    const tierGlow = 1 + (boss.tier - 1) * 0.1;
     const wing = bodyRadius * 0.78;
     const tail = bodyRadius * 0.72;
 
     const angle = Math.atan2(state.player.y - boss.y, state.player.x - boss.x);
+
+    const auraRadius = bodyRadius * (1.22 + (boss.tier - 1) * 0.04);
+    const auraGradient = ctx.createRadialGradient(
+      boss.x,
+      boss.y,
+      bodyRadius * 0.35,
+      boss.x,
+      boss.y,
+      auraRadius
+    );
+    auraGradient.addColorStop(0, `${variant.secondary}44`);
+    auraGradient.addColorStop(0.6, `${variant.primary}1f`);
+    auraGradient.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = auraGradient;
+    ctx.beginPath();
+    ctx.arc(boss.x, boss.y, auraRadius * (0.96 + wingPulse * 0.07), 0, Math.PI * 2);
+    ctx.fill();
+
+    const haloAlpha = 0.24 + glowPulse * 0.16;
+    ctx.strokeStyle = `rgba(255,255,255,${haloAlpha})`;
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.arc(boss.x, boss.y, bodyRadius * (1.02 + wingPulse * 0.06), 0, Math.PI * 2);
+    ctx.stroke();
 
     ctx.save();
     ctx.translate(boss.x, boss.y);
     ctx.rotate(angle + Math.PI / 2);
 
     ctx.shadowColor = `${variant.primary}bb`;
-    ctx.shadowBlur = 24;
+    ctx.shadowBlur = 30 * tierGlow;
 
     const hullGradient = ctx.createLinearGradient(0, -bodyRadius * 1.2, 0, bodyRadius * 0.9);
     hullGradient.addColorStop(0, variant.secondary);
@@ -3076,11 +4133,64 @@ if (arenaDom.canvas) {
     ctx.closePath();
     ctx.fill();
 
+    ctx.globalAlpha = 0.2 + wingPulse * 0.14;
+    ctx.fillStyle = `${variant.secondary}`;
+    ctx.beginPath();
+    ctx.moveTo(0, -bodyRadius * 0.95);
+    ctx.lineTo(wing * 1.06, bodyRadius * 0.04);
+    ctx.lineTo(wing * 0.38, bodyRadius * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, -bodyRadius * 0.95);
+    ctx.lineTo(-wing * 1.06, bodyRadius * 0.04);
+    ctx.lineTo(-wing * 0.38, bodyRadius * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    const edgeGradient = ctx.createLinearGradient(-wing, 0, wing, 0);
+    edgeGradient.addColorStop(0, "rgba(255,255,255,0.15)");
+    edgeGradient.addColorStop(0.5, `${variant.secondary}cc`);
+    edgeGradient.addColorStop(1, "rgba(255,255,255,0.15)");
+    ctx.strokeStyle = edgeGradient;
+    ctx.lineWidth = 2.4;
+    ctx.stroke();
+
+    ctx.shadowColor = `${variant.secondary}aa`;
+    ctx.shadowBlur = 20;
+    ctx.strokeStyle = `${variant.secondary}88`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, -bodyRadius * 0.02, bodyRadius * (0.42 + boss.tier * 0.015), 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = `rgba(20,28,44,${0.45 + wingPulse * 0.2})`;
+    ctx.beginPath();
+    ctx.moveTo(0, -bodyRadius * 0.95);
+    ctx.lineTo(bodyRadius * 0.16, -bodyRadius * 0.45);
+    ctx.lineTo(0, -bodyRadius * 0.28);
+    ctx.lineTo(-bodyRadius * 0.16, -bodyRadius * 0.45);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.shadowColor = `rgba(255,210,160,${0.6 + glowPulse * 0.25})`;
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = `rgba(255,198,132,${0.58 + glowPulse * 0.28})`;
+    ctx.fillRect(-bodyRadius * 0.21, bodyRadius * 0.72, bodyRadius * 0.11, bodyRadius * 0.24 * glowPulse);
+    ctx.fillRect(bodyRadius * 0.1, bodyRadius * 0.72, bodyRadius * 0.11, bodyRadius * 0.24 * glowPulse);
+
+    ctx.shadowColor = `rgba(120,225,255,${0.45 + glowPulse * 0.25})`;
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = `rgba(120,215,255,${0.45 + glowPulse * 0.22})`;
+    ctx.fillRect(-bodyRadius * 0.06, bodyRadius * 0.68, bodyRadius * 0.12, bodyRadius * 0.2 * glowPulse);
+
     ctx.shadowBlur = 0;
     ctx.fillStyle = "rgba(8, 13, 26, 0.62)";
     ctx.fillRect(-bodyRadius * 0.16, -bodyRadius * 0.36, bodyRadius * 0.32, bodyRadius * 0.56);
 
-    ctx.fillStyle = variant.secondary;
+    ctx.fillStyle = `rgba(255,255,255,${0.62 + wingPulse * 0.22})`;
     ctx.fillRect(-bodyRadius * 0.45, bodyRadius * 0.16, bodyRadius * 0.9, bodyRadius * 0.12);
 
     ctx.strokeStyle = `${variant.secondary}cc`;
@@ -3088,6 +4198,19 @@ if (arenaDom.canvas) {
     ctx.beginPath();
     ctx.arc(0, -bodyRadius * 0.05, bodyRadius * 0.3, 0, Math.PI * 2);
     ctx.stroke();
+
+    ctx.fillStyle = "rgba(255,255,255,0.72)";
+    ctx.font = "700 11px Rubik";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`T${boss.tier}`, 0, -bodyRadius * 0.04);
+
+    ctx.globalAlpha = 0.55 + glowPulse * 0.18;
+    ctx.fillStyle = "rgba(255,255,255,0.86)";
+    ctx.beginPath();
+    ctx.arc(0, -bodyRadius * 0.98, bodyRadius * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
     ctx.restore();
 
     const ratio = clamp(boss.hp / boss.maxHp, 0, 1);
@@ -3113,7 +4236,7 @@ if (arenaDom.canvas) {
 
   function drawBossTopHealthBar() {
     const boss = state.boss;
-    if (!boss) return;
+    if (!boss || boss.dying) return;
 
     const ratio = clamp(boss.hp / boss.maxHp, 0, 1);
     const barWidth = 440;
@@ -3245,7 +4368,82 @@ if (arenaDom.canvas) {
     ctx.fillText(`Stage ${state.stage}${bossText} — ${getTheme().name}${bossName}`, 16, 24);
   }
 
+  function drawStageTransition() {
+    if (state.stageTransitionMs <= 0 || state.stageTransitionDuration <= 0) {
+      return;
+    }
+
+    const progress = 1 - state.stageTransitionMs / state.stageTransitionDuration;
+    const fadeIn = clamp(progress / 0.25, 0, 1);
+    const fadeOut = clamp((1 - progress) / 0.28, 0, 1);
+    const alpha = Math.min(fadeIn, fadeOut);
+    const sweep = easeOutCubic(clamp(progress, 0, 1));
+    const lineY = HEIGHT * (0.18 + 0.64 * sweep);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    const vignette = ctx.createRadialGradient(WIDTH * 0.5, HEIGHT * 0.45, 20, WIDTH * 0.5, HEIGHT * 0.45, WIDTH * 0.75);
+    vignette.addColorStop(0, "rgba(110,150,255,0.08)");
+    vignette.addColorStop(1, "rgba(10,14,24,0)");
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    const lineGradient = ctx.createLinearGradient(0, lineY, WIDTH, lineY);
+    lineGradient.addColorStop(0, "rgba(121,215,255,0)");
+    lineGradient.addColorStop(0.2, "rgba(121,215,255,0.6)");
+    lineGradient.addColorStop(0.5, "rgba(255,255,255,0.95)");
+    lineGradient.addColorStop(0.8, "rgba(121,215,255,0.6)");
+    lineGradient.addColorStop(1, "rgba(121,215,255,0)");
+    ctx.strokeStyle = lineGradient;
+    ctx.lineWidth = 3.4;
+    ctx.beginPath();
+    ctx.moveTo(0, lineY);
+    ctx.lineTo(WIDTH, lineY);
+    ctx.stroke();
+
+    ctx.shadowColor = "rgba(140,220,255,0.8)";
+    ctx.shadowBlur = 24;
+    ctx.fillStyle = "rgba(255,255,255,0.97)";
+    ctx.font = "800 42px Rubik";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(state.stageTransitionTitle || `STAGE ${state.stage}`, WIDTH * 0.5, HEIGHT * 0.44);
+
+    ctx.shadowBlur = 0;
+    if (state.stageTransitionSubtitle) {
+      ctx.fillStyle = "rgba(190,225,255,0.9)";
+      ctx.font = "600 16px Rubik";
+      ctx.fillText(state.stageTransitionSubtitle, WIDTH * 0.5, HEIGHT * 0.49);
+    }
+
+    const shardAlpha = alpha * (1 - Math.abs(0.5 - progress) * 1.1);
+    ctx.globalAlpha = shardAlpha;
+    ctx.fillStyle = "rgba(135, 230, 255, 0.8)";
+    for (let i = 0; i < 14; i += 1) {
+      const t = (i + 1) / 15;
+      const dir = i % 2 === 0 ? -1 : 1;
+      const px = WIDTH * 0.5 + dir * (60 + 280 * t * sweep);
+      const py = HEIGHT * 0.44 + (i % 3 - 1) * 16 + Math.sin((progress * 8 + i) * 1.7) * 8;
+      const size = 4 + (i % 4);
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(progress * 10 + i);
+      ctx.fillRect(-size * 0.5, -size * 0.5, size, size * 0.36);
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
   function draw() {
+    if (state.multiplayer.duel && state.multiplayer.duel.active) {
+      drawBackground();
+      drawDuelMode();
+      drawStageTransition();
+      return;
+    }
+
     drawBackground();
     drawPulse();
     drawBullets();
@@ -3258,6 +4456,7 @@ if (arenaDom.canvas) {
     drawCrosshair();
     drawStageBanner();
     drawBossTopHealthBar();
+    drawStageTransition();
   }
 
   function loop(now) {
@@ -3346,16 +4545,9 @@ if (arenaDom.canvas) {
   }
 
   setMusicButtonLabel();
-
-  window.addEventListener(
-    "pointerdown",
-    () => {
-      if (!state.musicEnabled) {
-        void setMusicEnabled(true);
-      }
-    },
-    { once: true }
-  );
+  if (arenaDom.musicBtn) {
+    arenaDom.musicBtn.classList.add("hidden");
+  }
 
   window.addEventListener("keydown", (event) => {
     const key = event.key.toLowerCase();
@@ -3367,10 +4559,6 @@ if (arenaDom.canvas) {
     }
 
     keys.add(key);
-
-    if (!state.musicEnabled && (key === "w" || key === "a" || key === "s" || key === "d" || key === "arrowup" || key === "arrowdown" || key === "arrowleft" || key === "arrowright")) {
-      void setMusicEnabled(true);
-    }
 
     if (key === "shift") {
       event.preventDefault();
@@ -3437,12 +4625,13 @@ if (arenaDom.canvas) {
     });
   }
 
-  arenaDom.restartBtn.addEventListener("click", resetGame);
-  if (arenaDom.musicBtn) {
-    arenaDom.musicBtn.addEventListener("click", () => {
-      void toggleMusic();
-    });
-  }
+  arenaDom.restartBtn.addEventListener("click", () => {
+    if (state.multiplayer.duel) {
+      setMultiplayerStatus("Cannot restart during duel", true);
+      return;
+    }
+    resetGame();
+  });
   arenaDom.overlayBtn.addEventListener("click", resetGame);
   arenaDom.upg1.addEventListener("click", () => chooseUpgrade(0));
   arenaDom.upg2.addEventListener("click", () => chooseUpgrade(1));
@@ -3463,6 +4652,11 @@ if (arenaDom.canvas) {
 
   if (arenaDom.planeList) {
     arenaDom.planeList.addEventListener("click", (event) => {
+      if (state.multiplayer.duel) {
+        setMultiplayerStatus("You cannot switch plane during duel", true);
+        return;
+      }
+
       const button = event.target.closest("button[data-plane-id]");
       if (!button) return;
 
@@ -3508,7 +4702,37 @@ if (arenaDom.canvas) {
     });
   }
 
+  if (arenaDom.mpConnect) {
+    arenaDom.mpConnect.addEventListener("click", () => {
+      connectMultiplayer();
+    });
+  }
+
+  if (arenaDom.mpName) {
+    arenaDom.mpName.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        connectMultiplayer();
+      }
+    });
+  }
+
+  if (arenaDom.mpMode) {
+    arenaDom.mpMode.addEventListener("change", () => {
+      state.multiplayer.selectedMode = arenaDom.mpMode.value;
+    });
+  }
+
+  if (arenaDom.mpQueue) {
+    arenaDom.mpQueue.addEventListener("click", () => {
+      toggleMatchQueue();
+    });
+  }
+
   updateTouchActionLabels();
+  setMultiplayerStatus("Offline");
+  updateIncomingInviteUi();
+  renderMultiplayerUsers();
   resetGame();
   requestAnimationFrame(loop);
 }

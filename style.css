@@ -450,22 +450,225 @@ canvas {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text);
   font-size: 0.74rem;
-  padding: 0.28rem 0.35rem;
+  padding: 0.34rem 0.36rem;
   text-align: right;
+  display: grid;
+  gap: 0.24rem;
+  transition: border-color 0.16s ease, transform 0.16s ease, background 0.2s ease;
 }
 
 .plane-item.unlocked {
   cursor: pointer;
   border-color: rgba(140, 255, 26, 0.4);
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.08), rgba(120, 215, 255, 0.08));
+}
+
+.plane-item.unlocked:hover {
+  transform: translateX(-1px);
+  border-color: rgba(140, 255, 26, 0.75);
 }
 
 .plane-item.active {
   border-color: var(--accent);
-  box-shadow: 0 0 12px rgba(140, 255, 26, 0.25);
+  box-shadow: 0 0 14px rgba(140, 255, 26, 0.3);
 }
 
 .plane-item:disabled {
   opacity: 0.5;
+}
+
+.plane-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem;
+}
+
+.plane-item-id {
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.plane-item-type {
+  color: var(--muted);
+  font-size: 0.63rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 112px;
+}
+
+.plane-item-preview {
+  display: block;
+  position: relative;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--plane-fill, linear-gradient(120deg, #75e7ff, #99ff66));
+  box-shadow: 0 0 12px var(--plane-glow, rgba(140, 220, 255, 0.45));
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  overflow: hidden;
+}
+
+.plane-item-preview::before {
+  content: "";
+  position: absolute;
+  right: 18%;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36%;
+  height: 42%;
+  border-radius: 999px;
+  background: var(--plane-canopy, rgba(180, 240, 255, 0.75));
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
+}
+
+.plane-item-preview::after {
+  content: "";
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: var(--plane-trim, rgba(255, 255, 255, 0.82));
+  opacity: 0.7;
+}
+
+.plane-item-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.plane-stat {
+  font-size: 0.58rem;
+  line-height: 1;
+  padding: 0.14rem 0.26rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(8, 16, 30, 0.55);
+  color: rgba(228, 246, 255, 0.92);
+}
+
+.plane-item-locked {
+  font-size: 0.67rem;
+  color: rgba(255, 214, 166, 0.92);
+}
+
+.mp-panel {
+  position: absolute;
+  right: 0.85rem;
+  top: 0.85rem;
+  transform: none;
+  width: 172px;
+  max-height: 58%;
+  overflow: hidden;
+  background: rgba(4, 10, 20, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.55rem;
+  z-index: 3;
+  backdrop-filter: blur(4px);
+  display: grid;
+  gap: 0.36rem;
+}
+
+.mp-panel h3,
+.mp-panel h4 {
+  margin: 0;
+}
+
+.mp-panel h3 {
+  font-size: 0.95rem;
+}
+
+.mp-panel h4 {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.mp-label {
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.mp-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(8, 16, 30, 0.65);
+  color: var(--text);
+  padding: 0.33rem 0.4rem;
+  font-family: inherit;
+  font-size: 0.73rem;
+}
+
+.mp-status {
+  margin: 0;
+  font-size: 0.66rem;
+  color: #8de1ff;
+}
+
+.mp-users {
+  display: grid;
+  gap: 0.28rem;
+  max-height: 112px;
+  overflow-y: auto;
+  padding-right: 0.1rem;
+}
+
+.mp-user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.22rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 0.23rem 0.28rem;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mp-user-name {
+  font-size: 0.64rem;
+  color: rgba(225, 246, 255, 0.96);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-user-btn {
+  border: 1px solid rgba(140, 255, 26, 0.5);
+  background: rgba(140, 255, 26, 0.12);
+  color: #dfffcb;
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+  font-size: 0.6rem;
+  cursor: pointer;
+}
+
+.mp-incoming {
+  border: 1px solid rgba(141, 225, 255, 0.4);
+  border-radius: 10px;
+  padding: 0.34rem;
+  background: rgba(110, 190, 255, 0.09);
+  display: grid;
+  gap: 0.25rem;
+}
+
+.mp-incoming p {
+  margin: 0;
+  font-size: 0.66rem;
+}
+
+.mp-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.mp-actions .btn {
+  min-height: 32px;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.65rem;
 }
 
 .upgrade-grid {
@@ -547,6 +750,16 @@ canvas {
   .plane-dock {
     width: 140px;
     max-height: 64%;
+  }
+
+  .mp-panel {
+    width: 136px;
+    max-height: 52%;
+    padding: 0.45rem;
+  }
+
+  .mp-users {
+    max-height: 84px;
   }
 }
 

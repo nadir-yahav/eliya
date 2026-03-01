@@ -52,6 +52,30 @@
             <p id="haPlaneActive">מטוס פעיל: 1</p>
             <div id="haPlaneList" class="plane-list"></div>
           </aside>
+          <aside id="haMpPanel" class="mp-panel" aria-label="Multiplayer Duels">
+            <h3>Multiplayer</h3>
+            <label class="mp-label" for="haMpName">Player Name</label>
+            <input id="haMpName" class="mp-input" maxlength="24" placeholder="Your name" />
+            <label class="mp-label" for="haMpMode">Mode</label>
+            <select id="haMpMode" class="mp-input">
+              <option value="1v1">1v1 (50 coins)</option>
+              <option value="2v2">2v2 (100 coins)</option>
+              <option value="3v3">3v3 (100 coins, x2 map)</option>
+              <option value="4v4">4v4 (100 coins, x2 map)</option>
+            </select>
+            <button id="haMpConnect" class="btn">Connect</button>
+            <button id="haMpQueue" class="btn">Find Match</button>
+            <p id="haMpStatus" class="mp-status">Offline</p>
+            <h4>Online Players</h4>
+            <div id="haMpUsers" class="mp-users"></div>
+            <div id="haMpIncoming" class="mp-incoming hidden">
+              <p id="haMpIncomingText">Invite received</p>
+              <div class="mp-actions">
+                <button id="haMpAccept" class="btn">Accept</button>
+                <button id="haMpDecline" class="btn btn-outline">Decline</button>
+              </div>
+            </div>
+          </aside>
           <canvas id="arenaCanvas" width="960" height="540" aria-label="Halo Arena board"></canvas>
           <div class="mobile-controls" aria-label="Mobile Controls">
             <button id="haTouchDash" class="btn touch-btn">Dash</button>
