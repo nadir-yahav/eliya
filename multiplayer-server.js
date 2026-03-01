@@ -14,6 +14,7 @@ const wss = new WebSocket.Server({ port: PORT });
 const clients = new Map();
 const queueByMode = new Map(Object.keys(MODE_CONFIG).map((mode) => [mode, []]));
 const matches = new Map();
+const invites = new Map();
 
 function safeSend(socket, payload) {
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
@@ -80,43 +81,41 @@ function applySpawnsToPlayers(match) {
   });
 }
 
-function tryStartMatch(mode) {
+function startMatchFromEntries(mode, selectedEntries) {
   const config = MODE_CONFIG[mode];
-  if (!config) return;
+  if (!config) return false;
 
-  const queue = queueByMode.get(mode) || [];
   const needed = config.teamSize * 2;
-  if (queue.length < needed) return;
-
-  const selected = queue.slice(0, needed);
-  queueByMode.set(mode, queue.slice(needed));
-
-  const liveSelected = selected
-    .map((entry) => clients.get(entry.id))
-    .filter(Boolean)
-    .slice(0, needed);
-  if (liveSelected.length < needed) {
-    liveSelected.forEach((client) => {
-      queueByMode.get(mode).push({ id: client.id, planeId: entryPlane(client.id, selected) });
-    });
-    return;
+  if (!Array.isArray(selectedEntries) || selectedEntries.length < needed) {
+    return false;
   }
+
+  const liveSelected = selectedEntries
+    .map((entry) => ({ client: clients.get(entry.id), planeId: entry.planeId }))
+    .filter((entry) => entry.client)
+    .slice(0, needed);
+
+  if (liveSelected.length < needed) {
+    return false;
+  }
+
+  liveSelected.forEach((entry) => removeFromAllQueues(entry.client.id));
 
   const matchId = crypto.randomUUID();
   const { team1, team2 } = createSpawns(config);
   const players = [];
 
   for (let i = 0; i < liveSelected.length; i += 1) {
-    const client = liveSelected[i];
+    const { client, planeId } = liveSelected[i];
     const team = i < config.teamSize ? 1 : 2;
     const teamIndex = team === 1 ? i : i - config.teamSize;
     const spawn = team === 1 ? team1[teamIndex] : team2[teamIndex];
-    const queuedInfo = selected.find((entry) => entry.id === client.id);
+
     players.push({
       id: client.id,
       name: client.name,
       team,
-      planeId: Math.max(1, Math.min(1000, Number(queuedInfo?.planeId) || 1)),
+      planeId: Math.max(1, Math.min(1000, Number(planeId) || 1)),
       spawnX: spawn.x,
       spawnY: spawn.y,
       alive: true,
@@ -149,6 +148,8 @@ function tryStartMatch(mode) {
       players,
     });
   });
+
+  return true;
 }
 
 function entryPlane(clientId, entries) {
@@ -156,26 +157,33 @@ function entryPlane(clientId, entries) {
   return entry ? entry.planeId : 1;
 }
 
-function relayToMatch(match, senderId, payload) {
-  for (const player of match.players) {
-    if (player.id === senderId) continue;
-    const client = clients.get(player.id);
-    if (!client) continue;
-    safeSend(client.socket, payload);
+function tryStartMatch(mode) {
+  const config = MODE_CONFIG[mode];
+  if (!config) return;
+
+  const queue = queueByMode.get(mode) || [];
+  const needed = config.teamSize * 2;
+  if (queue.length < needed) return;
+
+  const selected = queue.slice(0, needed);
+  queueByMode.set(mode, queue.slice(needed));
+
+  const ok = startMatchFromEntries(mode, selected);
+  if (!ok) {
+    selected.forEach((entry) => {
+      if (clients.has(entry.id)) {
+        queueByMode.get(mode).push(entry);
+      }
+    });
   }
 }
 
-function markPlayerDown(match, playerId) {
-  const player = match.players.find((entry) => entry.id === playerId);
-  if (!player || !player.alive) return;
-  player.alive = false;
-
-  const team1Alive = match.players.some((entry) => entry.team === 1 && entry.alive);
-  const team2Alive = match.players.some((entry) => entry.team === 2 && entry.alive);
-
-  if (!team1Alive || !team2Alive) {
-    const winnerTeam = team1Alive ? 1 : 2;
-    handleRoundWin(match, winnerTeam, "team-eliminated");
+function relayToMatch(match, senderId, payload) {
+  for (const player of match.players) {
+    if (senderId && player.id === senderId) continue;
+    const client = clients.get(player.id);
+    if (!client) continue;
+    safeSend(client.socket, payload);
   }
 }
 
@@ -202,6 +210,20 @@ function handleRoundWin(match, winnerTeam, reason) {
   }
 }
 
+function markPlayerDown(match, playerId) {
+  const player = match.players.find((entry) => entry.id === playerId);
+  if (!player || !player.alive) return;
+  player.alive = false;
+
+  const team1Alive = match.players.some((entry) => entry.team === 1 && entry.alive);
+  const team2Alive = match.players.some((entry) => entry.team === 2 && entry.alive);
+
+  if (!team1Alive || !team2Alive) {
+    const winnerTeam = team1Alive ? 1 : 2;
+    handleRoundWin(match, winnerTeam, "team-eliminated");
+  }
+}
+
 function finalizeMatch(match, winnerTeam, reason) {
   if (!match || match.ended) return;
   match.ended = true;
@@ -221,6 +243,18 @@ function finalizeMatch(match, winnerTeam, reason) {
   });
 
   matches.delete(match.id);
+}
+
+function inviteKey(fromId, toId) {
+  return `${fromId}::${toId}`;
+}
+
+function clearInvitesForClient(clientId) {
+  for (const [key, value] of invites.entries()) {
+    if (value.fromId === clientId || value.toId === clientId) {
+      invites.delete(key);
+    }
+  }
 }
 
 wss.on("connection", (socket) => {
@@ -253,10 +287,88 @@ wss.on("connection", (socket) => {
       return;
     }
 
+    if (message.type === "inviteByName") {
+      if (client.matchId) {
+        safeSend(client.socket, { type: "inviteError", message: "You are already in a match" });
+        return;
+      }
+
+      const targetName = String(message.targetName || "").trim().toLowerCase();
+      if (!targetName) {
+        safeSend(client.socket, { type: "inviteError", message: "Target name is empty" });
+        return;
+      }
+
+      const target = Array.from(clients.values()).find(
+        (entry) => entry.id !== client.id && entry.name.trim().toLowerCase() === targetName
+      );
+
+      if (!target) {
+        safeSend(client.socket, { type: "inviteError", message: "Player not found or not connected" });
+        return;
+      }
+
+      if (target.matchId) {
+        safeSend(client.socket, { type: "inviteError", message: "Player is already in a match" });
+        return;
+      }
+
+      const planeId = Math.max(1, Math.min(1000, Number(message.planeId) || 1));
+      invites.set(inviteKey(client.id, target.id), { fromId: client.id, toId: target.id, planeId });
+      safeSend(target.socket, {
+        type: "invite",
+        fromId: client.id,
+        fromName: client.name,
+        planeId,
+      });
+      return;
+    }
+
+    if (message.type === "inviteResponse") {
+      const fromId = String(message.fromId || "");
+      const key = inviteKey(fromId, client.id);
+      const invite = invites.get(key);
+      if (!invite) {
+        safeSend(client.socket, { type: "inviteError", message: "Invite expired" });
+        return;
+      }
+      invites.delete(key);
+
+      const inviter = clients.get(fromId);
+      if (!inviter) {
+        safeSend(client.socket, { type: "inviteError", message: "Inviter disconnected" });
+        return;
+      }
+
+      if (!message.accepted) {
+        safeSend(inviter.socket, { type: "inviteDeclined", byName: client.name });
+        return;
+      }
+
+      if (inviter.matchId || client.matchId) {
+        safeSend(client.socket, { type: "inviteError", message: "Cannot start invite match now" });
+        safeSend(inviter.socket, { type: "inviteError", message: "Cannot start invite match now" });
+        return;
+      }
+
+      const acceptPlane = Math.max(1, Math.min(1000, Number(message.planeId) || 1));
+      const ok = startMatchFromEntries("1v1", [
+        { id: inviter.id, planeId: invite.planeId },
+        { id: client.id, planeId: acceptPlane },
+      ]);
+
+      if (!ok) {
+        safeSend(client.socket, { type: "inviteError", message: "Failed to start match" });
+        safeSend(inviter.socket, { type: "inviteError", message: "Failed to start match" });
+      }
+      return;
+    }
+
     if (message.type === "queueJoin") {
       const mode = MODE_CONFIG[message.mode] ? message.mode : "1v1";
       const planeId = Math.max(1, Math.min(1000, Number(message.planeId) || 1));
       removeFromAllQueues(client.id);
+  clearInvitesForClient(client.id);
       queueByMode.get(mode).push({ id: client.id, planeId });
       sendQueueStatus(client, mode, true);
       tryStartMatch(mode);
@@ -326,6 +438,7 @@ wss.on("connection", (socket) => {
 
   socket.on("close", () => {
     removeFromAllQueues(id);
+  clearInvitesForClient(id);
 
     if (client.matchId) {
       const match = matches.get(client.matchId);

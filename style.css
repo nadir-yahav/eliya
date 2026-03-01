@@ -617,6 +617,18 @@ canvas {
   padding-right: 0.1rem;
 }
 
+.mp-invite-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.24rem;
+}
+
+.mp-invite-row .btn {
+  min-height: 30px;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.62rem;
+}
+
 .mp-user {
   display: flex;
   align-items: center;

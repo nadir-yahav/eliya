@@ -54,6 +54,8 @@
           </aside>
           <aside id="haMpPanel" class="mp-panel" aria-label="Multiplayer Duels">
             <h3>Multiplayer</h3>
+            <label class="mp-label" for="haMpServer">Server URL</label>
+            <input id="haMpServer" class="mp-input" maxlength="140" placeholder="wss://your-server.example.com" />
             <label class="mp-label" for="haMpName">Player Name</label>
             <input id="haMpName" class="mp-input" maxlength="24" placeholder="Your name" />
             <label class="mp-label" for="haMpMode">Mode</label>
@@ -68,6 +70,11 @@
             <p id="haMpStatus" class="mp-status">Offline</p>
             <h4>Online Players</h4>
             <div id="haMpUsers" class="mp-users"></div>
+            <label class="mp-label" for="haMpInviteName">Invite by Name</label>
+            <div class="mp-invite-row">
+              <input id="haMpInviteName" class="mp-input" maxlength="24" placeholder="Player name" />
+              <button id="haMpInviteSend" class="btn">Invite</button>
+            </div>
             <div id="haMpIncoming" class="mp-incoming hidden">
               <p id="haMpIncomingText">Invite received</p>
               <div class="mp-actions">

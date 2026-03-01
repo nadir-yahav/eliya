@@ -28,12 +28,15 @@ const arenaDom = {
   touchDash: document.getElementById("haTouchDash"),
   touchPulse: document.getElementById("haTouchPulse"),
   mpPanel: document.getElementById("haMpPanel"),
+  mpServer: document.getElementById("haMpServer"),
   mpName: document.getElementById("haMpName"),
   mpMode: document.getElementById("haMpMode"),
   mpConnect: document.getElementById("haMpConnect"),
   mpQueue: document.getElementById("haMpQueue"),
   mpStatus: document.getElementById("haMpStatus"),
   mpUsers: document.getElementById("haMpUsers"),
+  mpInviteName: document.getElementById("haMpInviteName"),
+  mpInviteSend: document.getElementById("haMpInviteSend"),
   mpIncoming: document.getElementById("haMpIncoming"),
   mpIncomingText: document.getElementById("haMpIncomingText"),
   mpAccept: document.getElementById("haMpAccept"),
@@ -285,7 +288,7 @@ if (arenaDom.canvas) {
     "3v3": { teamSize: 3, reward: TEAM_MATCH_REWARD_COINS, mapScale: 2 },
     "4v4": { teamSize: 4, reward: TEAM_MATCH_REWARD_COINS, mapScale: 2 },
   };
-  const MULTIPLAYER_WS_URL =
+  const DEFAULT_MULTIPLAYER_WS_URL =
     localStorage.getItem("haloArenaWsUrl") ||
     `${location.protocol === "https:" ? "wss" : "ws"}://${location.hostname}:8080`;
   const PLANE_PROGRESS_KEY = "haloArenaPlaneProgressV2";
@@ -795,6 +798,7 @@ if (arenaDom.canvas) {
       socket: null,
       myId: null,
       name: "",
+      serverUrl: DEFAULT_MULTIPLAYER_WS_URL,
       selectedMode: "1v1",
       queueing: false,
       users: [],
@@ -2049,14 +2053,25 @@ if (arenaDom.canvas) {
       return;
     }
 
+    const serverUrl = String(arenaDom.mpServer?.value || state.multiplayer.serverUrl || DEFAULT_MULTIPLAYER_WS_URL).trim();
+    if (!/^wss?:\/\//i.test(serverUrl)) {
+      setMultiplayerStatus("Server URL must start with ws:// or wss://", true);
+      return;
+    }
+    state.multiplayer.serverUrl = serverUrl;
+    localStorage.setItem("haloArenaWsUrl", serverUrl);
+    if (arenaDom.mpServer) {
+      arenaDom.mpServer.value = serverUrl;
+    }
+
     const name = sanitizePlayerName(arenaDom.mpName?.value || "");
     state.multiplayer.name = name;
     if (arenaDom.mpName) {
       arenaDom.mpName.value = name;
     }
 
-    setMultiplayerStatus(`Connecting to ${MULTIPLAYER_WS_URL} ...`);
-    const socket = new WebSocket(MULTIPLAYER_WS_URL);
+    setMultiplayerStatus(`Connecting to ${serverUrl} ...`);
+    const socket = new WebSocket(serverUrl);
     state.multiplayer.socket = socket;
 
     socket.addEventListener("open", () => {
@@ -2101,6 +2116,27 @@ if (arenaDom.canvas) {
       if (message.type === "users") {
         state.multiplayer.users = Array.isArray(message.users) ? message.users : [];
         renderMultiplayerUsers();
+        return;
+      }
+
+      if (message.type === "invite") {
+        state.multiplayer.incomingInvite = {
+          fromId: message.fromId,
+          fromName: message.fromName,
+          planeId: message.planeId,
+        };
+        updateIncomingInviteUi();
+        setMultiplayerStatus(`Invite from ${message.fromName}`);
+        return;
+      }
+
+      if (message.type === "inviteDeclined") {
+        setMultiplayerStatus(`${message.byName || "Player"} declined your invite`, true);
+        return;
+      }
+
+      if (message.type === "inviteError") {
+        setMultiplayerStatus(message.message || "Invite failed", true);
         return;
       }
 
@@ -2223,6 +2259,34 @@ if (arenaDom.canvas) {
     sendMultiplayerMessage({ type: "queueLeave" });
     state.multiplayer.queueing = false;
     setMultiplayerStatus("Queue cancelled");
+  }
+
+  function sendInviteByName() {
+    if (!state.multiplayer.connected) {
+      setMultiplayerStatus("Connect first", true);
+      return;
+    }
+    if (state.multiplayer.duel) {
+      setMultiplayerStatus("Cannot invite during a match", true);
+      return;
+    }
+
+    const targetName = String(arenaDom.mpInviteName?.value || "").trim();
+    if (!targetName) {
+      setMultiplayerStatus("Write player name first", true);
+      return;
+    }
+
+    const plane = getActivePlane();
+    const sent = sendMultiplayerMessage({
+      type: "inviteByName",
+      targetName,
+      planeId: plane.id,
+    });
+
+    if (sent) {
+      setMultiplayerStatus(`Invite sent to ${targetName}`);
+    }
   }
 
   function updateDuel(dt, dtFactor) {
@@ -4544,6 +4608,13 @@ if (arenaDom.canvas) {
     enforceCreatorModePlanes();
   }
 
+  function isTypingInField() {
+    const element = document.activeElement;
+    if (!element) return false;
+    const tagName = String(element.tagName || "").toLowerCase();
+    return tagName === "input" || tagName === "textarea" || tagName === "select" || element.isContentEditable;
+  }
+
   setMusicButtonLabel();
   if (arenaDom.musicBtn) {
     arenaDom.musicBtn.classList.add("hidden");
@@ -4551,6 +4622,10 @@ if (arenaDom.canvas) {
 
   window.addEventListener("keydown", (event) => {
     const key = event.key.toLowerCase();
+
+    if (isTypingInField()) {
+      return;
+    }
 
     if (key === "f") {
       event.preventDefault();
@@ -4572,6 +4647,9 @@ if (arenaDom.canvas) {
   });
 
   window.addEventListener("keyup", (event) => {
+    if (isTypingInField()) {
+      return;
+    }
     const key = event.key.toLowerCase();
     keys.delete(key);
   });
@@ -4717,6 +4795,16 @@ if (arenaDom.canvas) {
     });
   }
 
+  if (arenaDom.mpServer) {
+    arenaDom.mpServer.value = state.multiplayer.serverUrl;
+    arenaDom.mpServer.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        connectMultiplayer();
+      }
+    });
+  }
+
   if (arenaDom.mpMode) {
     arenaDom.mpMode.addEventListener("change", () => {
       state.multiplayer.selectedMode = arenaDom.mpMode.value;
@@ -4726,6 +4814,53 @@ if (arenaDom.canvas) {
   if (arenaDom.mpQueue) {
     arenaDom.mpQueue.addEventListener("click", () => {
       toggleMatchQueue();
+    });
+  }
+
+  if (arenaDom.mpInviteSend) {
+    arenaDom.mpInviteSend.addEventListener("click", () => {
+      sendInviteByName();
+    });
+  }
+
+  if (arenaDom.mpInviteName) {
+    arenaDom.mpInviteName.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        sendInviteByName();
+      }
+    });
+  }
+
+  if (arenaDom.mpAccept) {
+    arenaDom.mpAccept.addEventListener("click", () => {
+      const invite = state.multiplayer.incomingInvite;
+      if (!invite) return;
+      const plane = getActivePlane();
+      sendMultiplayerMessage({
+        type: "inviteResponse",
+        fromId: invite.fromId,
+        accepted: true,
+        planeId: plane.id,
+      });
+      state.multiplayer.incomingInvite = null;
+      updateIncomingInviteUi();
+      setMultiplayerStatus(`Accepted invite from ${invite.fromName}`);
+    });
+  }
+
+  if (arenaDom.mpDecline) {
+    arenaDom.mpDecline.addEventListener("click", () => {
+      const invite = state.multiplayer.incomingInvite;
+      if (!invite) return;
+      sendMultiplayerMessage({
+        type: "inviteResponse",
+        fromId: invite.fromId,
+        accepted: false,
+      });
+      state.multiplayer.incomingInvite = null;
+      updateIncomingInviteUi();
+      setMultiplayerStatus(`Declined invite from ${invite.fromName}`);
     });
   }
 
