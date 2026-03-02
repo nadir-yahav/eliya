@@ -353,11 +353,42 @@ canvas {
 
 .mobile-controls {
   position: absolute;
+  left: 0.8rem;
   right: 0.8rem;
   bottom: 0.8rem;
   display: none;
-  gap: 0.45rem;
+  justify-content: space-between;
+  align-items: end;
   z-index: 4;
+  pointer-events: none;
+}
+
+.touch-joystick {
+  width: 108px;
+  height: 108px;
+  border-radius: 999px;
+  border: 1px solid rgba(140, 255, 26, 0.38);
+  background: radial-gradient(circle at center, rgba(24, 36, 56, 0.78), rgba(6, 14, 24, 0.82));
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  pointer-events: auto;
+}
+
+.touch-stick {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid rgba(160, 255, 86, 0.72);
+  background: rgba(140, 255, 26, 0.24);
+  box-shadow: 0 0 12px rgba(140, 255, 26, 0.25);
+  transition: transform 0.05s linear;
+}
+
+.mobile-actions {
+  display: grid;
+  gap: 0.45rem;
+  pointer-events: auto;
 }
 
 .touch-btn {
@@ -449,6 +480,109 @@ canvas {
   background: rgba(255, 255, 255, 0.06);
   font-size: 0.76rem;
   line-height: 1;
+}
+
+.shop-panel {
+  position: absolute;
+  right: 11.2rem;
+  top: 0.85rem;
+  width: 180px;
+  max-height: 26%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: rgba(4, 10, 20, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.42rem;
+  z-index: 3;
+  backdrop-filter: blur(4px);
+  display: grid;
+  gap: 0.24rem;
+}
+
+.shop-panel h3 {
+  margin: 0;
+  font-size: 0.78rem;
+  color: rgba(255, 241, 196, 0.95);
+}
+
+.shop-title {
+  margin: 0 0 0.22rem;
+  color: rgba(255, 241, 196, 0.95);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.shop-list {
+  display: grid;
+  gap: 0.2rem;
+  max-height: 140px;
+  overflow-y: auto;
+  padding-right: 0.1rem;
+}
+
+.shop-details {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.shop-label {
+  font-size: 0.56rem;
+  color: rgba(220, 235, 255, 0.92);
+}
+
+.shop-input {
+  min-height: 20px;
+  border: 1px solid rgba(160, 190, 220, 0.42);
+  border-radius: 7px;
+  background: rgba(8, 16, 30, 0.78);
+  color: rgba(238, 248, 255, 0.95);
+  font-size: 0.56rem;
+  padding: 0.1rem 0.26rem;
+}
+
+.shop-input::placeholder {
+  color: rgba(180, 206, 228, 0.74);
+}
+
+.shop-note {
+  margin: 0.05rem 0 0.12rem;
+  font-size: 0.5rem;
+  line-height: 1.2;
+  color: rgba(193, 219, 238, 0.84);
+}
+
+.shop-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.18rem 0.24rem;
+}
+
+.shop-item-label {
+  font-size: 0.58rem;
+  color: rgba(230, 245, 255, 0.95);
+  line-height: 1.2;
+}
+
+.shop-buy-btn {
+  min-height: 20px;
+  padding: 0.12rem 0.3rem;
+  border-radius: 999px;
+  border: 1px solid rgba(140, 255, 26, 0.45);
+  background: rgba(140, 255, 26, 0.13);
+  color: #deffcc;
+  font-size: 0.54rem;
+  cursor: pointer;
+}
+
+.shop-buy-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .plane-list {
@@ -601,7 +735,8 @@ canvas {
 }
 
 .plane-dock.panel-collapsed,
-.mp-panel.panel-collapsed {
+.mp-panel.panel-collapsed,
+.shop-panel.panel-collapsed {
   width: 98px;
   max-height: none;
   overflow: hidden;
@@ -609,12 +744,14 @@ canvas {
 }
 
 .plane-dock.panel-collapsed > :not(h3):not(.panel-toggle-btn),
-.mp-panel.panel-collapsed > :not(h3):not(.panel-toggle-btn) {
+.mp-panel.panel-collapsed > :not(h3):not(.panel-toggle-btn),
+.shop-panel.panel-collapsed > :not(h3):not(.panel-toggle-btn) {
   display: none !important;
 }
 
 .plane-dock.panel-collapsed h3,
-.mp-panel.panel-collapsed h3 {
+.mp-panel.panel-collapsed h3,
+.shop-panel.panel-collapsed h3 {
   margin: 0;
   font-size: 0.72rem;
 }
@@ -841,12 +978,19 @@ canvas {
 
   .mobile-controls {
     display: grid;
-    grid-template-columns: 1fr;
   }
 
   .plane-dock {
     width: 140px;
     max-height: 64%;
+  }
+
+  .shop-panel {
+    width: 140px;
+    max-height: 24%;
+    right: 7.6rem;
+    top: 0.85rem;
+    padding: 0.34rem;
   }
 
   .mp-panel {
@@ -856,7 +1000,8 @@ canvas {
   }
 
   .plane-dock.panel-collapsed,
-  .mp-panel.panel-collapsed {
+  .mp-panel.panel-collapsed,
+  .shop-panel.panel-collapsed {
     width: 84px;
     padding: 0.28rem;
   }
@@ -869,6 +1014,5 @@ canvas {
 @media (hover: none) and (pointer: coarse) {
   .mobile-controls {
     display: grid;
-    grid-template-columns: 1fr;
   }
 }

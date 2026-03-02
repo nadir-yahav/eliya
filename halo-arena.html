@@ -56,6 +56,19 @@
             <div id="haUpgradeSummary" class="upgrade-summary" aria-label="Added upgrades"></div>
             <div id="haPlaneList" class="plane-list"></div>
           </aside>
+          <aside id="haShopPanel" class="shop-panel" aria-label="Shop">
+            <h3>Shop</h3>
+            <div id="haShopDetails" class="shop-details" aria-label="Checkout details / פרטי תשלום">
+              <label class="shop-label" for="haShopFirstName">שם פרטי / First Name</label>
+              <input id="haShopFirstName" class="shop-input" maxlength="40" placeholder="ישראל" />
+              <label class="shop-label" for="haShopEmail">אימייל / Email</label>
+              <input id="haShopEmail" class="shop-input" type="email" maxlength="120" placeholder="name@example.com" />
+              <label class="shop-label" for="haShopPhone">טלפון / Phone</label>
+              <input id="haShopPhone" class="shop-input" type="tel" maxlength="20" placeholder="0501234567" />
+              <p class="shop-note">פרטי כרטיס אשראי מוזנים במסך תשלום מאובטח / Card details are entered in a secure checkout screen.</p>
+            </div>
+            <div id="haShopList" class="shop-list" aria-label="Shop offers"></div>
+          </aside>
           <aside id="haMpPanel" class="mp-panel" aria-label="Multiplayer Duels">
             <h3>Multiplayer</h3>
             <label class="mp-label" for="haMpServer">Server URL</label>
@@ -89,8 +102,13 @@
           </aside>
           <canvas id="arenaCanvas" width="960" height="540" aria-label="Halo Arena board"></canvas>
           <div class="mobile-controls" aria-label="Mobile Controls">
-            <button id="haTouchDash" class="btn touch-btn">Dash</button>
-            <button id="haTouchPulse" class="btn touch-btn">Pulse</button>
+            <div id="haTouchJoystick" class="touch-joystick" aria-label="Movement joystick">
+              <div id="haTouchStick" class="touch-stick"></div>
+            </div>
+            <div class="mobile-actions">
+              <button id="haTouchDash" class="btn touch-btn">Dash</button>
+              <button id="haTouchPulse" class="btn touch-btn">Pulse</button>
+            </div>
           </div>
           <div id="haOverlay" class="overlay hidden">
             <h2 id="haOverlayTitle">Halo Arena</h2>
@@ -113,9 +131,12 @@
 
         <div class="page-actions">
           <a href="index.html" class="btn btn-primary">חזרה לפורטל</a>
+          <a href="https://www.xbox.com/games/store" target="_blank" rel="noopener noreferrer" class="btn btn-outline">הורדה ב־Xbox / Download on Xbox</a>
+          <a href="https://store.playstation.com" target="_blank" rel="noopener noreferrer" class="btn btn-outline">הורדה ב־PlayStation / Download on PlayStation</a>
         </div>
       </section>
     </main>
+    <script src="https://js.stripe.com/v3/"></script>
     <script src="halo-arena.js"></script>
   </body>
 </html>

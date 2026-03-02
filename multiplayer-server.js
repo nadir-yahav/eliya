@@ -1,7 +1,161 @@
 const WebSocket = require("ws");
 const crypto = require("crypto");
+const http = require("http");
+const path = require("path");
+const express = require("express");
+const Stripe = require("stripe");
 
 const PORT = Number(process.env.PORT || 8080);
+const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+const SHOP_PAYMENT_PROVIDER = String(process.env.SHOP_PAYMENT_PROVIDER || "stripe").toLowerCase();
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
+const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY || "";
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+
+const SHOP_ITEMS = {
+  "plane-100": { id: "plane-100", name: "Plane #100", priceNis: 4 },
+  "plane-500": { id: "plane-500", name: "Plane #500", priceNis: 7 },
+  "plane-800": { id: "plane-800", name: "Plane #800", priceNis: 8 },
+  "plane-1000": { id: "plane-1000", name: "Plane #1000", priceNis: 10 },
+  "coins-50000": { id: "coins-50000", name: "50,000 Coins", priceNis: 5 },
+  "coins-100000": { id: "coins-100000", name: "100,000 Coins", priceNis: 10 },
+  "coins-500000": { id: "coins-500000", name: "500,000 Coins", priceNis: 15 },
+  "coins-1000000": { id: "coins-1000000", name: "1,000,000 Coins", priceNis: 20 },
+};
+
+const app = express();
+app.use(express.json());
+app.use(express.static(path.resolve(__dirname)));
+
+app.get("/api/shop/config", (_req, res) => {
+  const provider = SHOP_PAYMENT_PROVIDER === "google_play" ? "google_play" : "stripe";
+  res.json({
+    provider,
+    enabled: provider === "google_play"
+      ? true
+      : Boolean(stripe && STRIPE_PUBLISHABLE_KEY),
+    publishableKey: STRIPE_PUBLISHABLE_KEY || "",
+  });
+});
+
+app.post("/api/shop/create-checkout-session", async (req, res) => {
+  if (SHOP_PAYMENT_PROVIDER === "google_play") {
+    res.status(409).json({ error: "Checkout session is disabled in google_play mode" });
+    return;
+  }
+
+  if (!stripe || !STRIPE_PUBLISHABLE_KEY) {
+    res.status(503).json({ error: "Shop is not configured" });
+    return;
+  }
+
+  const shopItemId = String(req.body?.shopItemId || "");
+  const firstName = String(req.body?.firstName || "").trim();
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const phone = String(req.body?.phone || "").trim();
+
+  if (firstName.length < 2) {
+    res.status(400).json({ error: "Missing or invalid first name" });
+    return;
+  }
+  if (!email.includes("@") || email.length < 5) {
+    res.status(400).json({ error: "Missing or invalid email" });
+    return;
+  }
+  const phoneDigits = phone.replace(/\D/g, "");
+  if (phoneDigits.length < 7) {
+    res.status(400).json({ error: "Missing or invalid phone" });
+    return;
+  }
+
+  const item = SHOP_ITEMS[shopItemId];
+  if (!item) {
+    res.status(400).json({ error: "Invalid shop item" });
+    return;
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      customer_creation: "always",
+      customer_email: email,
+      phone_number_collection: {
+        enabled: true,
+      },
+      billing_address_collection: "required",
+      custom_fields: [
+        {
+          key: "first_name",
+          label: {
+            type: "custom",
+            custom: "First name",
+          },
+          type: "text",
+          text: {
+            minimum_length: 2,
+            maximum_length: 40,
+          },
+          optional: false,
+        },
+      ],
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "ils",
+            unit_amount: Math.round(item.priceNis * 100),
+            product_data: {
+              name: item.name,
+              description: `Halo Arena purchase: ${item.id}`,
+            },
+          },
+        },
+      ],
+      metadata: {
+        shopItemId: item.id,
+        firstName,
+        email,
+        phone,
+      },
+      success_url: `${BASE_URL}/halo-arena.html?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${BASE_URL}/halo-arena.html?checkout=cancel`,
+    });
+
+    res.json({ url: session.url });
+  } catch (error) {
+    res.status(500).json({ error: error?.message || "Failed to create checkout session" });
+  }
+});
+
+app.post("/api/shop/verify-session", async (req, res) => {
+  if (!stripe || !STRIPE_PUBLISHABLE_KEY) {
+    res.status(503).json({ error: "Shop is not configured" });
+    return;
+  }
+
+  const sessionId = String(req.body?.sessionId || "").trim();
+  if (!sessionId) {
+    res.status(400).json({ error: "Missing sessionId" });
+    return;
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const paid = session.payment_status === "paid";
+    const shopItemId = String(session.metadata?.shopItemId || "");
+
+    res.json({
+      paid,
+      sessionId,
+      shopItemId,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error?.message || "Failed to verify session" });
+  }
+});
+
+const server = http.createServer(app);
 const MODE_CONFIG = {
   "1v1": { teamSize: 1, rewardCoins: 50, mapScale: 1 },
   "2v2": { teamSize: 2, rewardCoins: 100, mapScale: 1 },
@@ -10,7 +164,7 @@ const MODE_CONFIG = {
 };
 const MATCH_TARGET_POINTS = 5;
 
-const wss = new WebSocket.Server({ port: PORT });
+const wss = new WebSocket.Server({ server });
 const clients = new Map();
 const queueByMode = new Map(Object.keys(MODE_CONFIG).map((mode) => [mode, []]));
 const matches = new Map();
@@ -454,4 +608,11 @@ wss.on("connection", (socket) => {
   });
 });
 
-console.log(`Halo Arena multiplayer server running on ws://localhost:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Halo Arena server running on ${BASE_URL}`);
+  console.log(`WebSocket endpoint: ws://localhost:${PORT}`);
+  console.log(`Shop payment provider: ${SHOP_PAYMENT_PROVIDER}`);
+  if (SHOP_PAYMENT_PROVIDER !== "google_play" && (!stripe || !STRIPE_PUBLISHABLE_KEY)) {
+    console.log("Stripe shop is disabled. Set STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY to enable real payments.");
+  }
+});

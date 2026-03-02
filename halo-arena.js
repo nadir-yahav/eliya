@@ -24,10 +24,18 @@ const arenaDom = {
   upg5: document.getElementById("haUpg5"),
   upg6: document.getElementById("haUpg6"),
   planeDock: document.getElementById("haPlaneDock"),
+  shopPanel: document.getElementById("haShopPanel"),
   planeList: document.getElementById("haPlaneList"),
   planeActive: document.getElementById("haPlaneActive"),
   upgradeSummary: document.getElementById("haUpgradeSummary"),
+  shopList: document.getElementById("haShopList"),
+  shopDetails: document.getElementById("haShopDetails"),
+  shopFirstName: document.getElementById("haShopFirstName"),
+  shopEmail: document.getElementById("haShopEmail"),
+  shopPhone: document.getElementById("haShopPhone"),
   coins: document.getElementById("haCoins"),
+  touchJoystick: document.getElementById("haTouchJoystick"),
+  touchStick: document.getElementById("haTouchStick"),
   touchDash: document.getElementById("haTouchDash"),
   touchPulse: document.getElementById("haTouchPulse"),
   mpPanel: document.getElementById("haMpPanel"),
@@ -69,6 +77,7 @@ if (arenaDom.canvas) {
     upgradeRepeatAt: 0,
   };
   const touchInput = { active: false, pointerId: null, targetX: 0, targetY: 0 };
+  const touchJoystickState = { active: false, pointerId: null, moveX: 0, moveY: 0 };
 
   const THEMES = [
     {
@@ -629,10 +638,12 @@ if (arenaDom.canvas) {
     `${location.protocol === "https:" ? "wss" : "ws"}://${location.hostname}:8080`;
   const PLANE_PROGRESS_KEY = "haloArenaPlaneProgressV2";
   const WORLD_PROGRESS_KEY = "haloArenaWorldProgressV1";
+  const CHOSEN_UPGRADES_KEY = "haloArenaChosenUpgradesV1";
   const CREATOR_MODE_KEY = "haloArenaCreatorModeV2";
   const CREATOR_ACCESS_CODE = "HALO-CREATOR-ONLY-2026";
   const PRIVATE_BOOST_KEY = "haloArenaPrivateBoostV1";
   const PRIVATE_BOOST_ACCESS_CODE = "HALO-PRIVATE-ME-2026";
+  const SHOP_PROCESSED_SESSIONS_KEY = "haloArenaPaidShopSessionsV1";
   const SERVANT_RESPAWN_MS = 3000;
   const SERVANT_BURST_SHOTS = 3;
   const SERVANT_BURST_INTERVAL_MS = 90;
@@ -642,6 +653,17 @@ if (arenaDom.canvas) {
     { name: "Striker", damage: 1.06, fireRate: 0.96, speed: 1.08, dash: 1.12, pulsePower: 1.02, pulseRadius: 1.01, shots: 0, damageReduction: 0.01, regen: 0.2 },
     { name: "Nova", damage: 1.05, fireRate: 0.97, speed: 1.02, dash: 1.04, pulsePower: 1.14, pulseRadius: 1.12, shots: 1, damageReduction: 0.02, regen: 0.3 },
     { name: "Storm", damage: 1.12, fireRate: 0.93, speed: 1.05, dash: 1.06, pulsePower: 1.08, pulseRadius: 1.04, shots: 1, damageReduction: 0.01, regen: 0.1 },
+  ];
+
+  const SHOP_ITEMS = [
+    { id: "plane-100", type: "plane", planeId: 100, priceNis: 4 },
+    { id: "plane-500", type: "plane", planeId: 500, priceNis: 7 },
+    { id: "plane-800", type: "plane", planeId: 800, priceNis: 8 },
+    { id: "plane-1000", type: "plane", planeId: 1000, priceNis: 10 },
+    { id: "coins-50000", type: "coins", coins: 50000, priceNis: 5 },
+    { id: "coins-100000", type: "coins", coins: 100000, priceNis: 10 },
+    { id: "coins-500000", type: "coins", coins: 500000, priceNis: 15 },
+    { id: "coins-1000000", type: "coins", coins: 1000000, priceNis: 20 },
   ];
 
   function buildPlaneCatalog() {
@@ -784,6 +806,7 @@ if (arenaDom.canvas) {
     state.highestWorldReached = 1;
     state.stage = 1;
     state.chosenUpgrades = [];
+    saveChosenUpgradesProgress();
     try {
       localStorage.setItem(
         WORLD_PROGRESS_KEY,
@@ -1163,8 +1186,50 @@ if (arenaDom.canvas) {
     },
   ];
 
+  function loadChosenUpgradesProgress() {
+    try {
+      const raw = localStorage.getItem(CHOSEN_UPGRADES_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+
+      const upgrades = parsed
+        .map((entry) => {
+          const title = String(entry?.title || "");
+          if (!title) return null;
+          const baseUpgrade = UPGRADE_POOL.find((upgrade) => upgrade.title === title);
+          if (!baseUpgrade) return null;
+          const tierName = String(entry?.tierName || "");
+          const tier = UPGRADE_TIERS.find((item) => item.name === tierName) || baseUpgrade.tier || UPGRADE_TIERS[0];
+          return { ...baseUpgrade, tier };
+        })
+        .filter(Boolean);
+
+      return upgrades;
+    } catch {
+      return [];
+    }
+  }
+
+  function saveChosenUpgradesProgress() {
+    try {
+      localStorage.setItem(
+        CHOSEN_UPGRADES_KEY,
+        JSON.stringify(
+          state.chosenUpgrades.map((upgrade) => ({
+            title: upgrade.title,
+            tierName: upgrade.tier?.name || "",
+          }))
+        )
+      );
+    } catch {
+      // ignore storage failures
+    }
+  }
+
   const initialPlaneProgress = loadPlaneProgress();
   const initialWorldProgress = loadWorldProgress();
+  const initialChosenUpgrades = [];
   const initialPrivateBoostEnabled = (() => {
     try {
       return localStorage.getItem(PRIVATE_BOOST_KEY) === "1";
@@ -1203,7 +1268,7 @@ if (arenaDom.canvas) {
     servants: [],
     availableUpgrades: [],
     pendingUpgrades: null,
-    chosenUpgrades: [],
+    chosenUpgrades: initialChosenUpgrades,
     selectedUpgradeSlot: -1,
     upgradeAutoPickTimer: null,
     multiplayer: {
@@ -2808,6 +2873,8 @@ if (arenaDom.canvas) {
     if (keys.has("d") || keys.has("arrowright")) moveX += 1;
     moveX += gamepadInput.moveX;
     moveY += gamepadInput.moveY;
+    moveX += touchJoystickState.moveX;
+    moveY += touchJoystickState.moveY;
 
     if (touchInput.active) {
       const dx = touchInput.targetX - player.x;
@@ -3077,12 +3144,13 @@ if (arenaDom.canvas) {
         `;
         button.disabled = false;
       } else {
+        const unlockCost = getPlaneUnlockCost(planeId);
         button.innerHTML = `
           <span class="plane-item-top">
             <span class="plane-item-id">#${planeId}</span>
             <span class="plane-item-type">LOCKED</span>
           </span>
-          <span class="plane-item-locked">🔒 מחיר: ${planeId}🪙</span>
+          <span class="plane-item-locked">🔒 מחיר: ${formatShopNumber(unlockCost)}🪙</span>
         `;
         const canBuyNow = state.creatorMode || planeId === nextUnlock;
         button.disabled = !canBuyNow;
@@ -3107,6 +3175,331 @@ if (arenaDom.canvas) {
     const activeButton = arenaDom.planeList.querySelector(".plane-item.active");
     if (activeButton) {
       activeButton.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  }
+
+  function formatShopNumber(value) {
+    return Number(value || 0).toLocaleString("en-US");
+  }
+
+  function getShopCustomerDetails() {
+    const firstName = String(arenaDom.shopFirstName?.value || "").trim();
+    const email = String(arenaDom.shopEmail?.value || "").trim();
+    const phone = String(arenaDom.shopPhone?.value || "").trim();
+    return { firstName, email, phone };
+  }
+
+  function validateShopCustomerDetails(details) {
+    if (!details.firstName || details.firstName.length < 2) {
+      return "יש להזין שם פרטי תקין / Please enter a valid first name";
+    }
+    if (!details.email || !details.email.includes("@") || details.email.length < 5) {
+      return "יש להזין אימייל תקין / Please enter a valid email";
+    }
+    const phoneDigits = details.phone.replace(/\D/g, "");
+    if (!phoneDigits || phoneDigits.length < 7) {
+      return "יש להזין מספר טלפון תקין / Please enter a valid phone number";
+    }
+    return "";
+  }
+
+  function getPlaneUnlockCost(planeId) {
+    if (planeId === 1000) return 10000;
+    return planeId;
+  }
+
+  function getShopApiBaseUrl() {
+    if (location.protocol === "http:" || location.protocol === "https:") {
+      return location.origin;
+    }
+    return "http://localhost:8080";
+  }
+
+  let shopConfigPromise = null;
+
+  function getShopConfig() {
+    if (!shopConfigPromise) {
+      shopConfigPromise = fetch(`${getShopApiBaseUrl()}/api/shop/config`)
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("Shop config request failed");
+          }
+          return response.json();
+        })
+        .catch(() => ({ enabled: false, provider: "stripe", publishableKey: "" }));
+    }
+    return shopConfigPromise;
+  }
+
+  function applyShopProviderUi(shopConfig) {
+    if (!arenaDom.shopDetails) return;
+    if (shopConfig?.provider === "google_play") {
+      arenaDom.shopDetails.classList.add("hidden");
+    } else {
+      arenaDom.shopDetails.classList.remove("hidden");
+    }
+  }
+
+  function hasGooglePlayBridge() {
+    return Boolean(
+      window.AndroidBilling
+      && (typeof window.AndroidBilling.purchase === "function"
+        || typeof window.AndroidBilling.purchaseWithDetails === "function")
+    );
+  }
+
+  function requestGooglePlayPurchase(shopId, customerDetails) {
+    if (!hasGooglePlayBridge()) {
+      showOverlay("Google Play Billing", "Run this build inside your Google Play Android app to complete payment.");
+      setTimeout(() => {
+        hideOverlay();
+      }, 1300);
+      return false;
+    }
+
+    try {
+      const payload = JSON.stringify({
+        shopItemId: shopId,
+        firstName: customerDetails.firstName,
+        email: customerDetails.email,
+        phone: customerDetails.phone,
+      });
+
+      if (typeof window.AndroidBilling.purchaseWithDetails === "function") {
+        window.AndroidBilling.purchaseWithDetails(shopId, payload);
+      } else {
+        window.AndroidBilling.purchase(shopId);
+      }
+
+      showOverlay("Google Play Billing", "Finish the payment in the Google Play purchase dialog.");
+      setTimeout(() => {
+        hideOverlay();
+      }, 1200);
+      return true;
+    } catch {
+      showOverlay("Google Play Error", "Could not open Google Play payment dialog.");
+      setTimeout(() => {
+        hideOverlay();
+      }, 1200);
+      return false;
+    }
+  }
+
+  window.haloArenaOnGooglePlayPurchase = (shopItemId) => {
+    const item = SHOP_ITEMS.find((entry) => entry.id === String(shopItemId || ""));
+    if (!item) {
+      showOverlay("Purchase Error", "Unknown product received from Google Play.");
+      setTimeout(() => {
+        hideOverlay();
+      }, 1000);
+      return;
+    }
+    grantShopItem(item);
+  };
+
+  window.haloArenaOnGooglePlayPurchaseFailed = () => {
+    showOverlay("Payment Failed", "Google Play payment was canceled or failed.");
+    setTimeout(() => {
+      hideOverlay();
+    }, 1000);
+  };
+
+  function loadProcessedPaidSessions() {
+    try {
+      const raw = localStorage.getItem(SHOP_PROCESSED_SESSIONS_KEY);
+      const parsed = JSON.parse(raw || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function markPaidSessionProcessed(sessionId) {
+    const normalizedId = String(sessionId || "").trim();
+    if (!normalizedId) return;
+    const current = loadProcessedPaidSessions();
+    if (current.includes(normalizedId)) return;
+    const next = [...current, normalizedId].slice(-120);
+    try {
+      localStorage.setItem(SHOP_PROCESSED_SESSIONS_KEY, JSON.stringify(next));
+    } catch {
+      // ignore storage failures
+    }
+  }
+
+  function isPaidSessionProcessed(sessionId) {
+    const normalizedId = String(sessionId || "").trim();
+    if (!normalizedId) return false;
+    return loadProcessedPaidSessions().includes(normalizedId);
+  }
+
+  function grantShopItem(item) {
+    if (!item) return false;
+    if (item.type === "plane") {
+      state.unlockedPlaneCount = Math.max(state.unlockedPlaneCount, item.planeId);
+      state.activePlaneId = item.planeId;
+      showOverlay("Purchase Complete", `You bought Plane #${item.planeId} for ₪${item.priceNis}`);
+    } else {
+      state.coins += item.coins;
+      showOverlay("Purchase Complete", `You bought ${formatShopNumber(item.coins)} coins for ₪${item.priceNis}`);
+    }
+    savePlaneProgress();
+    renderPlaneDock();
+    renderShop();
+    updateHud();
+    setTimeout(() => {
+      hideOverlay();
+    }, 1100);
+    return true;
+  }
+
+  async function handleCheckoutReturn() {
+    const params = new URLSearchParams(location.search);
+    const checkoutState = params.get("checkout");
+    const sessionId = params.get("session_id");
+    if (!checkoutState) return;
+
+    if (checkoutState === "cancel") {
+      showOverlay("Checkout Canceled", "Payment was canceled.");
+      setTimeout(() => {
+        hideOverlay();
+      }, 900);
+    }
+
+    if (checkoutState === "success" && sessionId && !isPaidSessionProcessed(sessionId)) {
+      try {
+        const response = await fetch(`${getShopApiBaseUrl()}/api/shop/verify-session`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId }),
+        });
+        const payload = await response.json();
+        if (response.ok && payload.paid) {
+          const item = SHOP_ITEMS.find((entry) => entry.id === payload.shopItemId);
+          if (item) {
+            grantShopItem(item);
+            markPaidSessionProcessed(sessionId);
+          }
+        } else {
+          showOverlay("Payment Not Verified", "Could not verify your payment.");
+          setTimeout(() => {
+            hideOverlay();
+          }, 1000);
+        }
+      } catch {
+        showOverlay("Payment Error", "Verification request failed.");
+        setTimeout(() => {
+          hideOverlay();
+        }, 1000);
+      }
+    }
+
+    const cleanUrl = `${location.origin}${location.pathname}`;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+
+  function renderShop() {
+    if (!arenaDom.shopList) return;
+
+    const fragment = document.createDocumentFragment();
+    SHOP_ITEMS.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "shop-item";
+
+      const label = document.createElement("span");
+      label.className = "shop-item-label";
+      if (item.type === "plane") {
+        label.textContent = `Plane #${item.planeId} — ₪${item.priceNis}`;
+      } else {
+        label.textContent = `${formatShopNumber(item.coins)} Coins — ₪${item.priceNis}`;
+      }
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "shop-buy-btn";
+      button.dataset.shopId = item.id;
+      if (item.type === "plane" && item.planeId <= state.unlockedPlaneCount) {
+        button.textContent = "Owned";
+        button.disabled = true;
+      } else {
+        button.textContent = "Buy";
+      }
+
+      row.appendChild(label);
+      row.appendChild(button);
+      fragment.appendChild(row);
+    });
+
+    arenaDom.shopList.innerHTML = "";
+    arenaDom.shopList.appendChild(fragment);
+  }
+
+  async function purchaseShopItem(shopId) {
+    const item = SHOP_ITEMS.find((entry) => entry.id === shopId);
+    if (!item) return;
+
+    const shopConfig = await getShopConfig();
+    applyShopProviderUi(shopConfig);
+
+    const productText = item.type === "plane"
+      ? `Plane #${item.planeId}`
+      : `${formatShopNumber(item.coins)} Coins`;
+
+    if (shopConfig.provider === "google_play") {
+      const approvedGooglePlay = window.confirm(`Buy ${productText} via Google Play for ₪${item.priceNis}?`);
+      if (!approvedGooglePlay) return;
+      requestGooglePlayPurchase(shopId, { firstName: "", email: "", phone: "" });
+      return;
+    }
+
+    const customerDetails = getShopCustomerDetails();
+    const customerDetailsError = validateShopCustomerDetails(customerDetails);
+    if (customerDetailsError) {
+      showOverlay("פרטים חסרים / Missing Details", customerDetailsError);
+      setTimeout(() => {
+        hideOverlay();
+      }, 1100);
+      return;
+    }
+
+    const approved = window.confirm(`Buy ${productText} for ₪${item.priceNis}?`);
+    if (!approved) return;
+
+    if (shopConfig.provider === "google_play") {
+      requestGooglePlayPurchase(shopId, customerDetails);
+      return;
+    }
+
+    if (!shopConfig.enabled || !shopConfig.publishableKey || !window.Stripe) {
+      showOverlay("Shop Offline", "Real payments are not configured yet.");
+      setTimeout(() => {
+        hideOverlay();
+      }, 1000);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${getShopApiBaseUrl()}/api/shop/create-checkout-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shopItemId: shopId,
+          firstName: customerDetails.firstName,
+          email: customerDetails.email,
+          phone: customerDetails.phone,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.url) {
+        throw new Error(payload.error || "Checkout creation failed");
+      }
+
+      window.location.href = payload.url;
+    } catch {
+      showOverlay("Checkout Error", "Failed to start payment checkout.");
+      setTimeout(() => {
+        hideOverlay();
+      }, 1000);
     }
   }
 
@@ -3312,11 +3705,13 @@ if (arenaDom.canvas) {
         state.privateBoostUpgrades = buildPrivateBoostUpgrades();
       }
       state.chosenUpgrades = [...state.privateBoostUpgrades];
+      saveChosenUpgradesProgress();
       applyUpgradeSetToPlayer(player, state.chosenUpgrades);
       state.highestWorldReached = Math.max(state.highestWorldReached, 9);
       saveWorldProgress();
-    } else if (state.chosenUpgrades.length > 0) {
-      applyUpgradeSetToPlayer(player, state.chosenUpgrades);
+    } else {
+      state.chosenUpgrades = [];
+      saveChosenUpgradesProgress();
     }
 
     applyPlaneStartingLoadout();
@@ -3332,6 +3727,7 @@ if (arenaDom.canvas) {
       `${getTheme().name} • ${getStageInWorld(state.stage)}/${STAGES_PER_WORLD}`
     );
     renderPlaneDock();
+    renderShop();
     savePlaneProgress();
     updateHud();
   }
@@ -4101,7 +4497,10 @@ if (arenaDom.canvas) {
 
     if (player.hp <= 0) {
       state.running = false;
-      showOverlay("Game Over", `ניקוד: ${Math.floor(state.score)} | הגעת לשלב ${state.stage}`);
+      state.chosenUpgrades = [];
+      saveChosenUpgradesProgress();
+      renderPlaneDock();
+      showOverlay("Game Over", `ניקוד: ${Math.floor(state.score)} | הגעת לשלב ${state.stage} | השדרוגים אופסו`);
     }
   }
 
@@ -4162,6 +4561,8 @@ if (arenaDom.canvas) {
 
     moveX += gamepadInput.moveX;
     moveY += gamepadInput.moveY;
+    moveX += touchJoystickState.moveX;
+    moveY += touchJoystickState.moveY;
 
     if (touchInput.active) {
       const dx = touchInput.targetX - player.x;
@@ -5484,6 +5885,7 @@ if (arenaDom.canvas) {
     // תיקון: מתחיל שלב חדש מיד, overlay ייסגר אוטומטית
     selected.apply(state.player, selected.tier);
     state.chosenUpgrades.push(selected);
+    saveChosenUpgradesProgress();
     renderPlaneDock();
     state.player.hp = state.player.maxHp;
     state.score += 30;
@@ -5537,6 +5939,7 @@ if (arenaDom.canvas) {
     } else {
       state.privateBoostUpgrades = [];
       state.chosenUpgrades = [];
+      saveChosenUpgradesProgress();
       try {
         localStorage.removeItem(PRIVATE_BOOST_KEY);
       } catch {
@@ -5644,6 +6047,7 @@ if (arenaDom.canvas) {
   }
 
   setupPanelToggle(arenaDom.planeDock, "haloArenaPlaneDockCollapsedV1", "טבלת המטוסים");
+  setupPanelToggle(arenaDom.shopPanel, "haloArenaShopPanelCollapsedV1", "חנות");
   setupPanelToggle(arenaDom.mpPanel, "haloArenaBattlePanelCollapsedV1", "טבלת הקרבות");
 
   window.addEventListener("keydown", (event) => {
@@ -5707,6 +6111,59 @@ if (arenaDom.canvas) {
   };
   arenaDom.canvas.addEventListener("pointerup", releaseTouchMove);
   arenaDom.canvas.addEventListener("pointercancel", releaseTouchMove);
+
+  if (arenaDom.touchJoystick && arenaDom.touchStick) {
+    const resetTouchJoystick = () => {
+      touchJoystickState.active = false;
+      touchJoystickState.pointerId = null;
+      touchJoystickState.moveX = 0;
+      touchJoystickState.moveY = 0;
+      arenaDom.touchStick.style.transform = "translate(0px, 0px)";
+    };
+
+    const updateTouchJoystick = (event) => {
+      const rect = arenaDom.touchJoystick.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const rawDx = event.clientX - centerX;
+      const rawDy = event.clientY - centerY;
+      const radius = Math.max(10, Math.min(rect.width, rect.height) * 0.5 - 23);
+      const distanceFromCenter = Math.hypot(rawDx, rawDy);
+      const clampScale = distanceFromCenter > radius ? radius / distanceFromCenter : 1;
+      const dx = rawDx * clampScale;
+      const dy = rawDy * clampScale;
+
+      touchJoystickState.moveX = dx / radius;
+      touchJoystickState.moveY = dy / radius;
+      arenaDom.touchStick.style.transform = `translate(${dx}px, ${dy}px)`;
+    };
+
+    arenaDom.touchJoystick.addEventListener("pointerdown", (event) => {
+      if (event.pointerType !== "touch") return;
+      event.preventDefault();
+      touchJoystickState.active = true;
+      touchJoystickState.pointerId = event.pointerId;
+      if (typeof arenaDom.touchJoystick.setPointerCapture === "function") {
+        arenaDom.touchJoystick.setPointerCapture(event.pointerId);
+      }
+      updateTouchJoystick(event);
+    });
+
+    arenaDom.touchJoystick.addEventListener("pointermove", (event) => {
+      if (!touchJoystickState.active || touchJoystickState.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      updateTouchJoystick(event);
+    });
+
+    const releaseTouchJoystick = (event) => {
+      if (touchJoystickState.pointerId !== event.pointerId) return;
+      resetTouchJoystick();
+    };
+
+    arenaDom.touchJoystick.addEventListener("pointerup", releaseTouchJoystick);
+    arenaDom.touchJoystick.addEventListener("pointercancel", releaseTouchJoystick);
+    arenaDom.touchJoystick.addEventListener("lostpointercapture", resetTouchJoystick);
+  }
 
   if (arenaDom.touchDash) {
     arenaDom.touchDash.addEventListener("pointerdown", (event) => {
@@ -5783,9 +6240,9 @@ if (arenaDom.canvas) {
           return;
         }
 
-        const cost = planeId;
+        const cost = getPlaneUnlockCost(planeId);
         if (state.coins < cost) {
-          showOverlay("אין מספיק מטבעות", `חסר לך ${cost - state.coins} מטבעות למטוס ${planeId}`);
+          showOverlay("אין מספיק מטבעות", `חסר לך ${formatShopNumber(cost - state.coins)} מטבעות למטוס ${planeId}`);
           setTimeout(() => {
             hideOverlay();
           }, 900);
@@ -5809,6 +6266,14 @@ if (arenaDom.canvas) {
           hideOverlay();
         }, 900);
       }
+    });
+  }
+
+  if (arenaDom.shopList) {
+    arenaDom.shopList.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-shop-id]");
+      if (!button || button.disabled) return;
+      purchaseShopItem(button.dataset.shopId);
     });
   }
 
@@ -5900,6 +6365,10 @@ if (arenaDom.canvas) {
   setMultiplayerStatus("Offline");
   updateIncomingInviteUi();
   renderMultiplayerUsers();
+  void getShopConfig().then((shopConfig) => {
+    applyShopProviderUi(shopConfig);
+  });
+  void handleCheckoutReturn();
   resetGame();
   requestAnimationFrame(loop);
 }
