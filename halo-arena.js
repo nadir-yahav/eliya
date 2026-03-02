@@ -25,11 +25,14 @@ const arenaDom = {
   upg6: document.getElementById("haUpg6"),
   planeDock: document.getElementById("haPlaneDock"),
   shopPanel: document.getElementById("haShopPanel"),
+  secretPanel: document.getElementById("haSecretPanel"),
   planeList: document.getElementById("haPlaneList"),
   planeActive: document.getElementById("haPlaneActive"),
   upgradeSummary: document.getElementById("haUpgradeSummary"),
   shopList: document.getElementById("haShopList"),
   shopDetails: document.getElementById("haShopDetails"),
+  secretCode: document.getElementById("haSecretCode"),
+  secretCodeBtn: document.getElementById("haSecretCodeBtn"),
   shopFirstName: document.getElementById("haShopFirstName"),
   shopEmail: document.getElementById("haShopEmail"),
   shopPhone: document.getElementById("haShopPhone"),
@@ -643,6 +646,7 @@ if (arenaDom.canvas) {
   const CREATOR_ACCESS_CODE = "HALO-CREATOR-ONLY-2026";
   const PRIVATE_BOOST_KEY = "haloArenaPrivateBoostV1";
   const PRIVATE_BOOST_ACCESS_CODE = "HALO-PRIVATE-ME-2026";
+  const SECRET_PLANE_1000_CODE = "7391048265";
   const SHOP_PROCESSED_SESSIONS_KEY = "haloArenaPaidShopSessionsV1";
   const SERVANT_RESPAWN_MS = 3000;
   const SERVANT_BURST_SHOTS = 3;
@@ -3206,6 +3210,37 @@ if (arenaDom.canvas) {
   function getPlaneUnlockCost(planeId) {
     if (planeId === 1000) return 10000;
     return planeId;
+  }
+
+  function redeemSecretPlaneCode(rawCode) {
+    const normalizedCode = String(rawCode || "").replace(/\D/g, "");
+    if (normalizedCode.length !== 10) {
+      showOverlay("Invalid Code", "Code must contain exactly 10 digits.");
+      setTimeout(() => {
+        hideOverlay();
+      }, 1100);
+      return false;
+    }
+
+    if (normalizedCode !== SECRET_PLANE_1000_CODE) {
+      showOverlay("Wrong Code", "The code you entered is incorrect.");
+      setTimeout(() => {
+        hideOverlay();
+      }, 1100);
+      return false;
+    }
+
+    state.unlockedPlaneCount = Math.max(state.unlockedPlaneCount, 1000);
+    state.activePlaneId = 1000;
+    savePlaneProgress();
+    renderPlaneDock();
+    renderShop();
+    updateHud();
+    showOverlay("You Won Plane 1000!", "Secret code redeemed successfully.");
+    setTimeout(() => {
+      hideOverlay();
+    }, 1200);
+    return true;
   }
 
   function getShopApiBaseUrl() {
@@ -5984,6 +6019,8 @@ if (arenaDom.canvas) {
     return true;
   };
 
+  window.redeemHaloPlane1000Code = (code) => redeemSecretPlaneCode(code);
+
   if (localStorage.getItem(CREATOR_MODE_KEY) === "1") {
     state.creatorMode = true;
     enforceCreatorModePlanes();
@@ -6006,8 +6043,8 @@ if (arenaDom.canvas) {
 
     const applyCollapsedState = (collapsed) => {
       panelElement.classList.toggle("panel-collapsed", collapsed);
-      toggleButton.textContent = collapsed ? "פתח" : "סגור";
-      const action = collapsed ? "פתח" : "סגור";
+      toggleButton.textContent = collapsed ? "Open" : "Close";
+      const action = collapsed ? "Open" : "Close";
       toggleButton.title = `${action} ${panelLabel}`;
       toggleButton.setAttribute("aria-label", `${action} ${panelLabel}`);
       toggleButton.setAttribute("aria-expanded", collapsed ? "false" : "true");
@@ -6048,6 +6085,7 @@ if (arenaDom.canvas) {
 
   setupPanelToggle(arenaDom.planeDock, "haloArenaPlaneDockCollapsedV1", "טבלת המטוסים");
   setupPanelToggle(arenaDom.shopPanel, "haloArenaShopPanelCollapsedV1", "חנות");
+  setupPanelToggle(arenaDom.secretPanel, "haloArenaSecretPanelCollapsedV1", "Secret Code");
   setupPanelToggle(arenaDom.mpPanel, "haloArenaBattlePanelCollapsedV1", "טבלת הקרבות");
 
   window.addEventListener("keydown", (event) => {
@@ -6274,6 +6312,21 @@ if (arenaDom.canvas) {
       const button = event.target.closest("button[data-shop-id]");
       if (!button || button.disabled) return;
       purchaseShopItem(button.dataset.shopId);
+    });
+  }
+
+  if (arenaDom.secretCodeBtn) {
+    arenaDom.secretCodeBtn.addEventListener("click", () => {
+      redeemSecretPlaneCode(arenaDom.secretCode?.value || "");
+    });
+  }
+
+  if (arenaDom.secretCode) {
+    arenaDom.secretCode.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        redeemSecretPlaneCode(arenaDom.secretCode.value || "");
+      }
     });
   }
 

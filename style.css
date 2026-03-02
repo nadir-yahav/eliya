@@ -500,6 +500,27 @@ canvas {
   gap: 0.24rem;
 }
 
+.secret-panel {
+  position: absolute;
+  right: 19.6rem;
+  top: 0.85rem;
+  width: 132px;
+  background: rgba(4, 10, 20, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.34rem;
+  z-index: 3;
+  backdrop-filter: blur(4px);
+  display: grid;
+  gap: 0.18rem;
+}
+
+.secret-panel h3 {
+  margin: 0;
+  font-size: 0.74rem;
+  color: rgba(255, 241, 196, 0.95);
+}
+
 .shop-panel h3 {
   margin: 0;
   font-size: 0.78rem;
@@ -550,6 +571,18 @@ canvas {
   font-size: 0.5rem;
   line-height: 1.2;
   color: rgba(193, 219, 238, 0.84);
+}
+
+.shop-secret {
+  display: grid;
+  gap: 0.14rem;
+}
+
+.shop-secret-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.18rem;
+  align-items: center;
 }
 
 .shop-item {
@@ -736,7 +769,8 @@ canvas {
 
 .plane-dock.panel-collapsed,
 .mp-panel.panel-collapsed,
-.shop-panel.panel-collapsed {
+.shop-panel.panel-collapsed,
+.secret-panel.panel-collapsed {
   width: 98px;
   max-height: none;
   overflow: hidden;
@@ -745,13 +779,15 @@ canvas {
 
 .plane-dock.panel-collapsed > :not(h3):not(.panel-toggle-btn),
 .mp-panel.panel-collapsed > :not(h3):not(.panel-toggle-btn),
-.shop-panel.panel-collapsed > :not(h3):not(.panel-toggle-btn) {
+.shop-panel.panel-collapsed > :not(h3):not(.panel-toggle-btn),
+.secret-panel.panel-collapsed > :not(h3):not(.panel-toggle-btn) {
   display: none !important;
 }
 
 .plane-dock.panel-collapsed h3,
 .mp-panel.panel-collapsed h3,
-.shop-panel.panel-collapsed h3 {
+.shop-panel.panel-collapsed h3,
+.secret-panel.panel-collapsed h3 {
   margin: 0;
   font-size: 0.72rem;
 }
@@ -993,6 +1029,12 @@ canvas {
     padding: 0.34rem;
   }
 
+  .secret-panel {
+    right: 14.9rem;
+    width: 118px;
+    padding: 0.3rem;
+  }
+
   .mp-panel {
     width: 102px;
     max-height: 34%;
@@ -1001,7 +1043,8 @@ canvas {
 
   .plane-dock.panel-collapsed,
   .mp-panel.panel-collapsed,
-  .shop-panel.panel-collapsed {
+  .shop-panel.panel-collapsed,
+  .secret-panel.panel-collapsed {
     width: 84px;
     padding: 0.28rem;
   }
