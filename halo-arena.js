@@ -3,11 +3,13 @@ const arenaDom = {
   score: document.getElementById("haScore"),
   health: document.getElementById("haHealth"),
   wave: document.getElementById("haWave"),
+  world: document.getElementById("haWorld"),
   weapon: document.getElementById("haWeapon"),
   dash: document.getElementById("haDash"),
   pulse: document.getElementById("haPulse"),
   musicBtn: document.getElementById("haMusicBtn"),
   fullscreenBtn: document.getElementById("haFullscreenBtn"),
+  resetWorldsBtn: document.getElementById("haResetWorldsBtn"),
   restartBtn: document.getElementById("haRestartBtn"),
   overlay: document.getElementById("haOverlay"),
   overlayTitle: document.getElementById("haOverlayTitle"),
@@ -24,6 +26,7 @@ const arenaDom = {
   planeDock: document.getElementById("haPlaneDock"),
   planeList: document.getElementById("haPlaneList"),
   planeActive: document.getElementById("haPlaneActive"),
+  upgradeSummary: document.getElementById("haUpgradeSummary"),
   coins: document.getElementById("haCoins"),
   touchDash: document.getElementById("haTouchDash"),
   touchPulse: document.getElementById("haTouchPulse"),
@@ -110,6 +113,8 @@ if (arenaDom.canvas) {
       speed: (stage) => 1.7 + stage * 0.07,
       shootCooldown: 1400,
       score: 22,
+      movePattern: "wobble",
+      attackPattern: "single",
     },
     striker: {
       label: "Striker",
@@ -118,6 +123,8 @@ if (arenaDom.canvas) {
       speed: (stage) => 1.3 + stage * 0.06,
       shootCooldown: 1200,
       score: 30,
+      movePattern: "strikerWave",
+      attackPattern: "split",
     },
     bomber: {
       label: "Bomber",
@@ -126,6 +133,8 @@ if (arenaDom.canvas) {
       speed: (stage) => 0.9 + stage * 0.03,
       shootCooldown: 1700,
       score: 44,
+      movePattern: "bomberGlide",
+      attackPattern: "fanDown",
     },
     sniper: {
       label: "Sniper",
@@ -134,6 +143,8 @@ if (arenaDom.canvas) {
       speed: (stage) => 1.1 + stage * 0.04,
       shootCooldown: 2100,
       score: 50,
+      movePattern: "kite",
+      attackPattern: "snipe",
     },
     interceptor: {
       label: "Interceptor",
@@ -142,13 +153,220 @@ if (arenaDom.canvas) {
       speed: (stage) => 2.2 + stage * 0.09,
       shootCooldown: 1600,
       score: 38,
+      movePattern: "zigzag",
+      attackPattern: "dashShot",
+    },
+    sentinel: {
+      label: "Sentinel",
+      color: "#8ea8ff",
+      hp: (stage) => 58 + stage * 9,
+      speed: (stage) => 1.0 + stage * 0.035,
+      shootCooldown: 1500,
+      score: 46,
+      movePattern: "strafe",
+      attackPattern: "burst3",
+    },
+    phantom: {
+      label: "Phantom",
+      color: "#7cf4ff",
+      hp: (stage) => 40 + stage * 7,
+      speed: (stage) => 1.6 + stage * 0.06,
+      shootCooldown: 1750,
+      score: 42,
+      movePattern: "teleport",
+      attackPattern: "cross",
+    },
+    juggernaut: {
+      label: "Juggernaut",
+      color: "#ffb36d",
+      hp: (stage) => 120 + stage * 16,
+      speed: (stage) => 0.65 + stage * 0.02,
+      shootCooldown: 2200,
+      score: 70,
+      movePattern: "bulwark",
+      attackPattern: "slowOrb",
+      radius: 20,
+    },
+    wasp: {
+      label: "Wasp",
+      color: "#fff07b",
+      hp: (stage) => 28 + stage * 5,
+      speed: (stage) => 2.45 + stage * 0.1,
+      shootCooldown: 980,
+      score: 36,
+      movePattern: "swarm",
+      attackPattern: "needle",
+    },
+    orbitron: {
+      label: "Orbitron",
+      color: "#a3ffdd",
+      hp: (stage) => 54 + stage * 8,
+      speed: (stage) => 1.35 + stage * 0.05,
+      shootCooldown: 1650,
+      score: 48,
+      movePattern: "orbitRush",
+      attackPattern: "spiral",
+    },
+    pyromancer: {
+      label: "Pyromancer",
+      color: "#ff7f69",
+      hp: (stage) => 62 + stage * 10,
+      speed: (stage) => 1.15 + stage * 0.045,
+      shootCooldown: 1800,
+      score: 52,
+      movePattern: "sineWide",
+      attackPattern: "arcRain",
+    },
+    cryodrone: {
+      label: "Cryodrone",
+      color: "#9ad5ff",
+      hp: (stage) => 50 + stage * 8,
+      speed: (stage) => 1.05 + stage * 0.04,
+      shootCooldown: 1900,
+      score: 45,
+      movePattern: "hoverStall",
+      attackPattern: "slowOrb",
+    },
+    spark: {
+      label: "Spark",
+      color: "#d2ff5e",
+      hp: (stage) => 34 + stage * 6,
+      speed: (stage) => 2.0 + stage * 0.08,
+      shootCooldown: 1180,
+      score: 39,
+      movePattern: "weave",
+      attackPattern: "chainBolt",
+    },
+    mortar: {
+      label: "Mortar",
+      color: "#d8a7ff",
+      hp: (stage) => 74 + stage * 12,
+      speed: (stage) => 0.8 + stage * 0.03,
+      shootCooldown: 2100,
+      score: 58,
+      movePattern: "anchor",
+      attackPattern: "lob",
+    },
+    raptor: {
+      label: "Raptor",
+      color: "#ff9a95",
+      hp: (stage) => 46 + stage * 8,
+      speed: (stage) => 1.9 + stage * 0.075,
+      shootCooldown: 1280,
+      score: 44,
+      movePattern: "flank",
+      attackPattern: "tripleWave",
+    },
+    mimic: {
+      label: "Mimic",
+      color: "#86ffd3",
+      hp: (stage) => 52 + stage * 9,
+      speed: (stage) => 1.4 + stage * 0.05,
+      shootCooldown: 1700,
+      score: 47,
+      movePattern: "mimic",
+      attackPattern: "mirror",
+    },
+    vortexling: {
+      label: "Vortexling",
+      color: "#8dffe4",
+      hp: (stage) => 48 + stage * 8,
+      speed: (stage) => 1.45 + stage * 0.055,
+      shootCooldown: 1500,
+      score: 49,
+      movePattern: "spiralDive",
+      attackPattern: "spiral",
+    },
+    harpoon: {
+      label: "Harpoon",
+      color: "#ffd4a8",
+      hp: (stage) => 56 + stage * 9,
+      speed: (stage) => 1.25 + stage * 0.045,
+      shootCooldown: 1560,
+      score: 50,
+      movePattern: "backstep",
+      attackPattern: "pierce",
+    },
+    quasar: {
+      label: "Quasar",
+      color: "#f1a6ff",
+      hp: (stage) => 63 + stage * 10,
+      speed: (stage) => 1.12 + stage * 0.042,
+      shootCooldown: 1850,
+      score: 57,
+      movePattern: "pulse",
+      attackPattern: "nova",
+    },
+    reaper: {
+      label: "Reaper",
+      color: "#ff7676",
+      hp: (stage) => 68 + stage * 11,
+      speed: (stage) => 1.38 + stage * 0.05,
+      shootCooldown: 1450,
+      score: 60,
+      movePattern: "hunter",
+      attackPattern: "burst5",
+    },
+    anchor: {
+      label: "Anchor",
+      color: "#7fb8ff",
+      hp: (stage) => 84 + stage * 13,
+      speed: (stage) => 0.78 + stage * 0.025,
+      shootCooldown: 2050,
+      score: 64,
+      movePattern: "anchor",
+      attackPattern: "mineDrop",
+      radius: 18,
+    },
+    shard: {
+      label: "Shard",
+      color: "#9bf7ff",
+      hp: (stage) => 42 + stage * 7,
+      speed: (stage) => 1.85 + stage * 0.07,
+      shootCooldown: 1220,
+      score: 41,
+      movePattern: "feint",
+      attackPattern: "shotgun",
+    },
+    echo: {
+      label: "Echo",
+      color: "#d0c3ff",
+      hp: (stage) => 52 + stage * 8,
+      speed: (stage) => 1.32 + stage * 0.05,
+      shootCooldown: 1620,
+      score: 48,
+      movePattern: "echo",
+      attackPattern: "doubleTap",
+    },
+    tempest: {
+      label: "Tempest",
+      color: "#87f0ff",
+      hp: (stage) => 60 + stage * 10,
+      speed: (stage) => 1.5 + stage * 0.06,
+      shootCooldown: 1360,
+      score: 55,
+      movePattern: "storm",
+      attackPattern: "arcRain",
+    },
+    nullifier: {
+      label: "Nullifier",
+      color: "#c9e1ff",
+      hp: (stage) => 66 + stage * 11,
+      speed: (stage) => 1.08 + stage * 0.04,
+      shootCooldown: 1760,
+      score: 59,
+      movePattern: "suppressor",
+      attackPattern: "cross",
     },
   };
+
+  const ENEMY_TYPE_SEQUENCE = Object.keys(ENEMY_TYPES);
 
   const BOSS_VARIANTS = [
     {
       id: "titan",
       name: "Titan Dreadnought",
+      aiProfile: "titan",
       primary: "#ffb980",
       secondary: "#ffdcae",
       laserColor: "rgba(255,120,120,",
@@ -159,6 +377,7 @@ if (arenaDom.canvas) {
     {
       id: "seraph",
       name: "Seraph Stormcore",
+      aiProfile: "seraph",
       primary: "#9fc7ff",
       secondary: "#d9e8ff",
       laserColor: "rgba(122,164,255,",
@@ -169,6 +388,7 @@ if (arenaDom.canvas) {
     {
       id: "wraith",
       name: "Wraith Harbinger",
+      aiProfile: "wraith",
       primary: "#d39cff",
       secondary: "#f0d7ff",
       laserColor: "rgba(220,140,255,",
@@ -179,6 +399,7 @@ if (arenaDom.canvas) {
     {
       id: "vortex",
       name: "Vortex Leviathan",
+      aiProfile: "vortex",
       primary: "#8dffe4",
       secondary: "#d9fff7",
       laserColor: "rgba(132,255,226,",
@@ -189,6 +410,7 @@ if (arenaDom.canvas) {
     {
       id: "inferno",
       name: "Inferno Behemoth",
+      aiProfile: "inferno",
       primary: "#ff8a66",
       secondary: "#ffe2d6",
       laserColor: "rgba(255,118,88,",
@@ -199,12 +421,123 @@ if (arenaDom.canvas) {
     {
       id: "aegis",
       name: "Aegis Nullframe",
+      aiProfile: "aegis",
       primary: "#b5c3ff",
       secondary: "#f0f4ff",
       laserColor: "rgba(176,196,255,",
       radius: 57,
       baseHp: 1000,
       hpScale: 152,
+    },
+    {
+      id: "hydra",
+      name: "Hydra Tri-Core",
+      aiProfile: "hydra",
+      primary: "#8bffb3",
+      secondary: "#dbffe6",
+      laserColor: "rgba(130,255,170,",
+      radius: 55,
+      baseHp: 980,
+      hpScale: 148,
+    },
+    {
+      id: "nebula",
+      name: "Nebula Prism",
+      aiProfile: "nebula",
+      primary: "#b6a1ff",
+      secondary: "#ece5ff",
+      laserColor: "rgba(181,153,255,",
+      radius: 54,
+      baseHp: 960,
+      hpScale: 146,
+    },
+    {
+      id: "onyx",
+      name: "Onyx Overlord",
+      aiProfile: "onyx",
+      primary: "#ffd3a0",
+      secondary: "#fff0dc",
+      laserColor: "rgba(255,193,130,",
+      radius: 61,
+      baseHp: 1080,
+      hpScale: 160,
+    },
+    {
+      id: "zephyr",
+      name: "Zephyr Cyclone",
+      aiProfile: "zephyr",
+      primary: "#9de5ff",
+      secondary: "#e8f9ff",
+      laserColor: "rgba(138,222,255,",
+      radius: 53,
+      baseHp: 940,
+      hpScale: 144,
+    },
+    {
+      id: "quantum",
+      name: "Quantum Riftlord",
+      aiProfile: "quantum",
+      primary: "#f0a4ff",
+      secondary: "#ffe7ff",
+      laserColor: "rgba(239,145,255,",
+      radius: 56,
+      baseHp: 990,
+      hpScale: 150,
+    },
+    {
+      id: "omega",
+      name: "Omega Annihilator",
+      aiProfile: "omega",
+      primary: "#ff9ca1",
+      secondary: "#ffe4e6",
+      laserColor: "rgba(255,128,136,",
+      radius: 59,
+      baseHp: 1040,
+      hpScale: 156,
+    },
+    {
+      id: "phantasm",
+      name: "Phantasm Shade",
+      aiProfile: "phantasm",
+      primary: "#b4ffd9",
+      secondary: "#ebfff5",
+      laserColor: "rgba(140,255,214,",
+      radius: 52,
+      baseHp: 930,
+      hpScale: 142,
+    },
+    {
+      id: "colossus",
+      name: "Colossus Prime",
+      aiProfile: "colossus",
+      primary: "#ffc27d",
+      secondary: "#ffedd5",
+      laserColor: "rgba(255,178,102,",
+      radius: 62,
+      baseHp: 1120,
+      hpScale: 165,
+    },
+    {
+      id: "ember",
+      name: "Ember Tyrant",
+      aiProfile: "ember",
+      primary: "#ff8c66",
+      secondary: "#ffe6dc",
+      laserColor: "rgba(255,125,96,",
+      radius: 58,
+      baseHp: 1010,
+      hpScale: 153,
+    },
+    {
+      id: "mythic",
+      name: "Mythic Starforged",
+      aiProfile: "mythic",
+      primary: "#b2c8ff",
+      secondary: "#f0f5ff",
+      laserColor: "rgba(175,198,255,",
+      radius: 60,
+      baseHp: 1060,
+      hpScale: 158,
     },
   ];
 
@@ -282,6 +615,9 @@ if (arenaDom.canvas) {
   const DUEL_BULLET_SPEED = 11.6;
   const DUEL_BULLET_LIFE = 86;
   const TEAM_MATCH_REWARD_COINS = 100;
+  const STAGES_PER_WORLD = 10;
+  const TOTAL_WORLDS = 10;
+  const FINAL_STAGE = STAGES_PER_WORLD * TOTAL_WORLDS;
   const MATCH_MODE_CONFIG = {
     "1v1": { teamSize: 1, reward: DUEL_WIN_COINS, mapScale: 1 },
     "2v2": { teamSize: 2, reward: TEAM_MATCH_REWARD_COINS, mapScale: 1 },
@@ -292,8 +628,11 @@ if (arenaDom.canvas) {
     localStorage.getItem("haloArenaWsUrl") ||
     `${location.protocol === "https:" ? "wss" : "ws"}://${location.hostname}:8080`;
   const PLANE_PROGRESS_KEY = "haloArenaPlaneProgressV2";
+  const WORLD_PROGRESS_KEY = "haloArenaWorldProgressV1";
   const CREATOR_MODE_KEY = "haloArenaCreatorModeV2";
   const CREATOR_ACCESS_CODE = "HALO-CREATOR-ONLY-2026";
+  const PRIVATE_BOOST_KEY = "haloArenaPrivateBoostV1";
+  const PRIVATE_BOOST_ACCESS_CODE = "HALO-PRIVATE-ME-2026";
   const SERVANT_RESPAWN_MS = 3000;
   const SERVANT_BURST_SHOTS = 3;
   const SERVANT_BURST_INTERVAL_MS = 90;
@@ -397,6 +736,70 @@ if (arenaDom.canvas) {
     } catch {
       // ignore storage failures
     }
+  }
+
+  function loadWorldProgress() {
+    try {
+      const raw = localStorage.getItem(WORLD_PROGRESS_KEY);
+      if (!raw) {
+        return { highestWorldReached: 1 };
+      }
+
+      const parsed = JSON.parse(raw);
+      const highestWorldReached = clamp(Number(parsed.highestWorldReached) || 1, 1, TOTAL_WORLDS);
+      return { highestWorldReached };
+    } catch {
+      return { highestWorldReached: 1 };
+    }
+  }
+
+  function saveWorldProgress() {
+    try {
+      localStorage.setItem(
+        WORLD_PROGRESS_KEY,
+        JSON.stringify({
+          highestWorldReached: state.highestWorldReached,
+        })
+      );
+    } catch {
+      // ignore storage failures
+    }
+  }
+
+  function persistWorldProgress(stageToSave = state.stage) {
+    const normalizedStage = clamp(Number(stageToSave) || 1, 1, FINAL_STAGE);
+    const reachedWorld = getWorldForStage(normalizedStage);
+    if (reachedWorld > state.highestWorldReached) {
+      state.highestWorldReached = reachedWorld;
+      saveWorldProgress();
+    }
+  }
+
+  function resetWorldProgress() {
+    const shouldReset = window.confirm("Do you want to reset worlds and stages progress?");
+    if (!shouldReset) {
+      return;
+    }
+
+    state.highestWorldReached = 1;
+    state.stage = 1;
+    state.chosenUpgrades = [];
+    try {
+      localStorage.setItem(
+        WORLD_PROGRESS_KEY,
+        JSON.stringify({
+          highestWorldReached: 1,
+        })
+      );
+    } catch {
+      // ignore storage failures
+    }
+
+    showOverlay("Progress Reset", "Worlds and stages were reset.");
+    setTimeout(() => {
+      hideOverlay();
+    }, 900);
+    resetGame();
   }
 
   // שדרוגים עם tier קבוע
@@ -761,10 +1164,19 @@ if (arenaDom.canvas) {
   ];
 
   const initialPlaneProgress = loadPlaneProgress();
+  const initialWorldProgress = loadWorldProgress();
+  const initialPrivateBoostEnabled = (() => {
+    try {
+      return localStorage.getItem(PRIVATE_BOOST_KEY) === "1";
+    } catch {
+      return false;
+    }
+  })();
 
   const state = {
     running: true,
-    stage: 1,
+    stage: getFirstStageForWorld(initialWorldProgress.highestWorldReached),
+    highestWorldReached: initialWorldProgress.highestWorldReached,
     score: 0,
     coins: initialPlaneProgress.coins,
     stars: [],
@@ -791,6 +1203,7 @@ if (arenaDom.canvas) {
     servants: [],
     availableUpgrades: [],
     pendingUpgrades: null,
+    chosenUpgrades: [],
     selectedUpgradeSlot: -1,
     upgradeAutoPickTimer: null,
     multiplayer: {
@@ -809,6 +1222,9 @@ if (arenaDom.canvas) {
     stageTransitionDuration: 0,
     stageTransitionTitle: "",
     stageTransitionSubtitle: "",
+    gameCompleted: false,
+    privateBoostEnabled: initialPrivateBoostEnabled,
+    privateBoostUpgrades: [],
     musicEnabled: false,
     player: {
       x: WIDTH / 2,
@@ -864,6 +1280,68 @@ if (arenaDom.canvas) {
   const BOSS_STAGE_TRACK_URL = "https://pixabay.com/music/electronic-retro-arcade-game-music-487316/";
   const BOSS_STAGE_TRACK_INDEX = Math.max(0, REAL_MUSIC_PLAYLIST.indexOf(BOSS_STAGE_TRACK_URL));
 
+  function getUpgradeIcon(option) {
+    const text = `${option?.title || ""} ${option?.desc || ""}`.toLowerCase();
+
+    if (
+      text.includes("speed") ||
+      text.includes("מהירות") ||
+      text.includes("ion") ||
+      text.includes("dash") ||
+      text.includes("blink") ||
+      text.includes("thruster")
+    ) {
+      return "🏃";
+    }
+
+    if (
+      text.includes("shield") ||
+      text.includes("armor") ||
+      text.includes("hull") ||
+      text.includes("fortress")
+    ) {
+      return "🛡️";
+    }
+
+    if (
+      text.includes("health") ||
+      text.includes("hp") ||
+      text.includes("regen") ||
+      text.includes("repair") ||
+      text.includes("vampire") ||
+      text.includes("חיים") ||
+      text.includes("ריפוי")
+    ) {
+      return "❤️";
+    }
+
+    if (
+      text.includes("pulse") ||
+      text.includes("shock") ||
+      text.includes("arc")
+    ) {
+      return "⚡";
+    }
+
+    if (
+      text.includes("bullet") ||
+      text.includes("cannon") ||
+      text.includes("shot") ||
+      text.includes("barrage") ||
+      text.includes("caliber") ||
+      text.includes("ירי") ||
+      text.includes("קליע")
+    ) {
+      return "🔫";
+    }
+
+    if (text.includes("final") || text.includes("god")) {
+      return "👑";
+    }
+
+    return "🚀";
+  }
+
   function showUpgradeSelection(upgrades) {
     state.running = false;
     hideOverlay();
@@ -898,7 +1376,15 @@ if (arenaDom.canvas) {
       }
 
       button.classList.remove("hidden");
-      button.textContent = `${option.title} — ${option.desc} [${option.tier.name}]`;
+      button.innerHTML = "";
+      const icon = document.createElement("span");
+      icon.className = "upgrade-icon";
+      icon.textContent = getUpgradeIcon(option);
+      const label = document.createElement("span");
+      label.className = "upgrade-label";
+      label.textContent = `${option.title} — ${option.desc} [${option.tier.name}]`;
+      button.appendChild(icon);
+      button.appendChild(label);
       if (option.tier.name === "קשת") {
         button.style.background = "linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet)";
         button.style.color = "#fff";
@@ -1344,7 +1830,22 @@ if (arenaDom.canvas) {
   }
 
   function getTheme() {
-    return THEMES[(state.stage - 1) % THEMES.length];
+    return THEMES[(getWorldForStage(state.stage) - 1) % THEMES.length];
+  }
+
+  function getWorldForStage(stage) {
+    const normalizedStage = Math.max(1, Number(stage) || 1);
+    return Math.floor((normalizedStage - 1) / STAGES_PER_WORLD) + 1;
+  }
+
+  function getFirstStageForWorld(world) {
+    const normalizedWorld = clamp(Number(world) || 1, 1, TOTAL_WORLDS);
+    return (normalizedWorld - 1) * STAGES_PER_WORLD + 1;
+  }
+
+  function getStageInWorld(stage) {
+    const normalizedStage = Math.max(1, Number(stage) || 1);
+    return ((normalizedStage - 1) % STAGES_PER_WORLD) + 1;
   }
 
   function initStars() {
@@ -2558,6 +3059,7 @@ if (arenaDom.canvas) {
         const rapid = `${Math.round((1 / plane.fireRateMult) * 100)}% ROF`;
         const power = `${Math.round(plane.damageMult * 100)}% DMG`;
         const speed = `${Math.round(plane.speedMult * 100)}% SPD`;
+        const hp = `${320 + plane.startHpBonus} HP`;
         const swatch = `linear-gradient(120deg, ${plane.primary}, ${plane.secondary})`;
         const glow = plane.glow.replace("0.75", "0.9");
         button.innerHTML = `
@@ -2567,6 +3069,7 @@ if (arenaDom.canvas) {
           </span>
           <span class="plane-item-preview" style="--plane-fill:${swatch};--plane-glow:${glow};--plane-trim:${plane.trim};--plane-canopy:${plane.canopy};"></span>
           <span class="plane-item-stats">
+            <span class="plane-stat">${hp}</span>
             <span class="plane-stat">${power}</span>
             <span class="plane-stat">${rapid}</span>
             <span class="plane-stat">${speed}</span>
@@ -2589,6 +3092,17 @@ if (arenaDom.canvas) {
 
     arenaDom.planeList.innerHTML = "";
     arenaDom.planeList.appendChild(fragment);
+
+    if (arenaDom.upgradeSummary) {
+      arenaDom.upgradeSummary.innerHTML = "";
+      state.chosenUpgrades.forEach((upgrade) => {
+        const iconBadge = document.createElement("span");
+        iconBadge.className = "upgrade-summary-icon";
+        iconBadge.textContent = getUpgradeIcon(upgrade);
+        iconBadge.title = `${upgrade.title || "Upgrade"}`;
+        arenaDom.upgradeSummary.appendChild(iconBadge);
+      });
+    }
 
     const activeButton = arenaDom.planeList.querySelector(".plane-item.active");
     if (activeButton) {
@@ -2627,10 +3141,14 @@ if (arenaDom.canvas) {
     const player = state.player;
     const plane = getActivePlane();
     const duel = state.multiplayer.duel;
+    const world = getWorldForStage(state.stage);
 
     arenaDom.score.textContent = Math.floor(state.score);
     arenaDom.health.textContent = Math.max(0, Math.floor(player.hp));
     arenaDom.wave.textContent = duel ? duel.mode.toUpperCase() : state.stage;
+    if (arenaDom.world) {
+      arenaDom.world.textContent = duel ? "Duel" : `${world}/${TOTAL_WORLDS}`;
+    }
     if (arenaDom.coins) {
       arenaDom.coins.textContent = `🪙 מטבעות: ${Math.floor(state.coins)}`;
     }
@@ -2693,12 +3211,13 @@ if (arenaDom.canvas) {
     const variant = getBossVariantForStage(state.stage);
     const bossTier = getBossTier(state.stage);
     const scaling = getBossStageScaling(state.stage, bossTier);
-    const hp = variant.baseHp * scaling.hp;
+    const hp = variant.baseHp * scaling.hp * 3;
     state.boss = {
       x: WIDTH / 2,
       y: 92,
       radius: variant.radius,
       variant,
+      aiProfile: variant.aiProfile || "titan",
       tier: bossTier,
       damageScale: scaling.damage,
       fireRateScale: scaling.fireRate,
@@ -2711,6 +3230,9 @@ if (arenaDom.canvas) {
       burstCooldown: 900,
       missileCooldown: 1300,
       jumpCooldown: 1800,
+      dashCooldown: 1600,
+      summonCooldown: 2400,
+      phaseShiftCooldown: 2300,
       laser: {
         mode: "idle",
         timer: 1800,
@@ -2745,7 +3267,8 @@ if (arenaDom.canvas) {
 
   function resetGame() {
     state.running = true;
-    state.stage = 1;
+    state.gameCompleted = false;
+    state.stage = state.privateBoostEnabled ? getFirstStageForWorld(9) : 1;
     state.score = 0;
     state.bullets = [];
     state.enemyBullets = [];
@@ -2783,6 +3306,19 @@ if (arenaDom.canvas) {
     player.tempRapid = 0;
     player.tempSpread = 0;
     player.tempPower = 0;
+
+    if (state.privateBoostEnabled) {
+      if (!Array.isArray(state.privateBoostUpgrades) || state.privateBoostUpgrades.length !== 100) {
+        state.privateBoostUpgrades = buildPrivateBoostUpgrades();
+      }
+      state.chosenUpgrades = [...state.privateBoostUpgrades];
+      applyUpgradeSetToPlayer(player, state.chosenUpgrades);
+      state.highestWorldReached = Math.max(state.highestWorldReached, 9);
+      saveWorldProgress();
+    } else if (state.chosenUpgrades.length > 0) {
+      applyUpgradeSetToPlayer(player, state.chosenUpgrades);
+    }
+
     applyPlaneStartingLoadout();
 
     initStars();
@@ -2791,17 +3327,46 @@ if (arenaDom.canvas) {
     resetStageProgress();
     hideOverlay();
     hideUpgradeSelection();
-    triggerStageTransition(`STAGE ${state.stage}`, getTheme().name);
+    triggerStageTransition(
+      `STAGE ${state.stage} • WORLD ${getWorldForStage(state.stage)}`,
+      `${getTheme().name} • ${getStageInWorld(state.stage)}/${STAGES_PER_WORLD}`
+    );
     renderPlaneDock();
     savePlaneProgress();
     updateHud();
   }
 
+  function completeGame() {
+    if (state.gameCompleted) {
+      return;
+    }
+
+    state.gameCompleted = true;
+    state.running = false;
+    state.pendingUpgrades = null;
+    state.availableUpgrades = [];
+    hideUpgradeSelection();
+
+    state.unlockedPlaneCount = MAX_PLANES;
+    state.activePlaneId = clamp(state.activePlaneId, 1, state.unlockedPlaneCount);
+    persistWorldProgress(FINAL_STAGE);
+    savePlaneProgress();
+    renderPlaneDock();
+
+    triggerStageTransition("YOU FINISHED THE GAME", "ALL PLANES UNLOCKED");
+    showOverlay(
+      "YOU FINISHED THE GAME",
+      "You completed all 10 worlds! You unlocked all planes in the game."
+    );
+    updateHud();
+  }
+
   function getAllowedEnemyTypes() {
-    if (state.stage <= 2) return ["scout", "striker"];
-    if (state.stage <= 4) return ["scout", "striker", "bomber"];
-    if (state.stage <= 6) return ["scout", "striker", "bomber", "sniper"];
-    return ["scout", "striker", "bomber", "sniper", "interceptor"];
+    const unlockedCount = Math.min(
+      ENEMY_TYPE_SEQUENCE.length,
+      2 + Math.floor((Math.max(1, state.stage) - 1) / 2)
+    );
+    return ENEMY_TYPE_SEQUENCE.slice(0, Math.max(2, unlockedCount));
   }
 
   function spawnEnemy() {
@@ -2817,7 +3382,7 @@ if (arenaDom.canvas) {
       type: typeKey,
       x: 60 + Math.random() * (WIDTH - 120),
       y: -40,
-      radius: 16,
+      radius: type.radius || 16,
       hp,
       maxHp: hp,
       speed,
@@ -2825,6 +3390,10 @@ if (arenaDom.canvas) {
       wobbleSeed: seed,
       drift: (Math.random() - 0.5) * 0.7,
       phase: Math.random() * Math.PI * 2,
+      teleportCooldown: 850 + Math.random() * 900,
+      dashCooldown: 900 + Math.random() * 800,
+      pulseTimer: 0,
+      mirrorSign: Math.random() > 0.5 ? 1 : -1,
     });
 
     state.stageSpawned += 1;
@@ -2957,138 +3526,181 @@ if (arenaDom.canvas) {
 
   function fireEnemy(enemy) {
     const player = state.player;
-    const type = enemy.type;
+    const config = ENEMY_TYPES[enemy.type] || ENEMY_TYPES.scout;
     const angleToPlayer = Math.atan2(player.y - enemy.y, player.x - enemy.x);
     const scaling = getEnemyStageScaling(state.stage);
     const damageScale = scaling.damage;
-    const speedScale = 1;
+    const speedScale = 1 + Math.min(0.3, (state.stage - 1) * 0.0035);
+    const bulletColor = config.color;
 
-    if (type === "scout") {
+    const pushBullet = (angle, speed, damage, radius, life = 170, extra = {}) => {
       state.enemyBullets.push({
         x: enemy.x,
         y: enemy.y,
-        vx: Math.cos(angleToPlayer) * 4.6 * speedScale,
-        vy: Math.sin(angleToPlayer) * 4.6 * speedScale,
-        life: 150,
-        damage: 11 * damageScale,
-        radius: 3,
-        color: "#8cf0ff",
+        vx: Math.cos(angle) * speed * speedScale,
+        vy: Math.sin(angle) * speed * speedScale,
+        life,
+        damage: damage * damageScale,
+        radius,
+        color: bulletColor,
+        ...extra,
       });
-    }
+    };
 
-    if (type === "striker") {
-      for (let i = -1; i <= 1; i += 2) {
-        state.enemyBullets.push({
-          x: enemy.x,
-          y: enemy.y,
-          vx: Math.cos(angleToPlayer + i * 0.12) * 4.2 * speedScale,
-          vy: Math.sin(angleToPlayer + i * 0.12) * 4.2 * speedScale,
-          life: 140,
-          damage: 10 * damageScale,
-          radius: 3,
-          color: "#ffb38f",
-        });
-      }
-    }
-
-    if (type === "bomber") {
-      for (let i = -1; i <= 1; i += 1) {
-        const a = Math.PI / 2 + i * 0.35;
-        state.enemyBullets.push({
-          x: enemy.x,
-          y: enemy.y,
-          vx: Math.cos(a) * 3 * speedScale,
-          vy: Math.sin(a) * 3 * speedScale,
-          life: 180,
-          damage: 13 * damageScale,
-          radius: 4,
-          color: "#dab5ff",
-        });
-      }
-    }
-
-    if (type === "sniper") {
-      state.enemyBullets.push({
-        x: enemy.x,
-        y: enemy.y,
-        vx: Math.cos(angleToPlayer) * 6.2 * speedScale,
-        vy: Math.sin(angleToPlayer) * 6.2 * speedScale,
-        life: 180,
-        damage: 18 * damageScale,
-        radius: 3.6,
-        color: "#fff0a6",
-      });
-    }
-
-    if (type === "interceptor") {
-      state.enemyBullets.push({
-        x: enemy.x,
-        y: enemy.y,
-        vx: Math.cos(angleToPlayer) * 5 * speedScale,
-        vy: Math.sin(angleToPlayer) * 5 * speedScale,
-        life: 130,
-        damage: 12 * damageScale,
-        radius: 3,
-        color: "#a5ffb6",
-      });
+    switch (config.attackPattern) {
+      case "single":
+        pushBullet(angleToPlayer, 4.6, 11, 3, 150);
+        break;
+      case "split":
+        pushBullet(angleToPlayer - 0.12, 4.2, 10, 3, 140);
+        pushBullet(angleToPlayer + 0.12, 4.2, 10, 3, 140);
+        break;
+      case "fanDown":
+        for (let i = -1; i <= 1; i += 1) {
+          pushBullet(Math.PI / 2 + i * 0.35, 3, 13, 4, 180);
+        }
+        break;
+      case "snipe":
+        pushBullet(angleToPlayer, 6.2, 18, 3.6, 190);
+        break;
+      case "dashShot":
+        pushBullet(angleToPlayer, 5, 12, 3, 130);
+        break;
+      case "burst3":
+        for (let i = -1; i <= 1; i += 1) {
+          pushBullet(angleToPlayer + i * 0.08, 4.4, 11, 3.2, 165);
+        }
+        break;
+      case "cross":
+        for (let i = 0; i < 4; i += 1) {
+          pushBullet(i * (Math.PI / 2), 3.7, 12, 3.4, 180);
+        }
+        break;
+      case "spiral":
+        pushBullet(enemy.phase * 0.8, 4, 11, 3.1, 190);
+        pushBullet(enemy.phase * 0.8 + Math.PI, 4, 11, 3.1, 190);
+        break;
+      case "slowOrb":
+        pushBullet(angleToPlayer, 2.5, 16, 5.2, 250);
+        break;
+      case "needle":
+        pushBullet(angleToPlayer, 6.8, 9, 2.4, 120);
+        break;
+      case "arcRain":
+        for (let i = -2; i <= 2; i += 1) {
+          pushBullet(angleToPlayer + i * 0.17, 3.8, 12, 3.5, 185);
+        }
+        break;
+      case "chainBolt":
+        pushBullet(angleToPlayer, 4.9, 10, 3, 145);
+        pushBullet(angleToPlayer + 0.22 * enemy.mirrorSign, 4.9, 10, 3, 145);
+        break;
+      case "lob":
+        pushBullet(Math.PI / 2, 2.4, 17, 5.3, 240, { vy: 3.6 * speedScale });
+        break;
+      case "tripleWave":
+        for (let i = -1; i <= 1; i += 1) {
+          pushBullet(angleToPlayer + i * 0.22, 4.3, 11, 3.2, 165);
+        }
+        break;
+      case "mirror":
+        pushBullet(angleToPlayer, 4.2, 12, 3.4, 170);
+        pushBullet(Math.PI - angleToPlayer, 4.2, 12, 3.4, 170);
+        break;
+      case "pierce":
+        pushBullet(angleToPlayer, 6.1, 14, 3.1, 210);
+        break;
+      case "nova":
+        for (let i = 0; i < 8; i += 1) {
+          pushBullet((Math.PI * 2 * i) / 8, 3.5, 10, 3.1, 180);
+        }
+        break;
+      case "burst5":
+        for (let i = -2; i <= 2; i += 1) {
+          pushBullet(angleToPlayer + i * 0.09, 4.8, 11, 3.1, 165);
+        }
+        break;
+      case "mineDrop":
+        pushBullet(Math.PI / 2, 1.5, 15, 5.5, 260, { vx: enemy.drift * 0.8 });
+        break;
+      case "shotgun":
+        for (let i = -3; i <= 3; i += 1) {
+          pushBullet(angleToPlayer + i * 0.12, 3.9, 9, 2.9, 145);
+        }
+        break;
+      case "doubleTap":
+        pushBullet(angleToPlayer - 0.04, 4.7, 11, 3, 155);
+        pushBullet(angleToPlayer + 0.04, 4.7, 11, 3, 155);
+        break;
+      default:
+        pushBullet(angleToPlayer, 4.5, 11, 3.1, 160);
+        break;
     }
   }
 
   function fireBossBurst(boss) {
-    const id = boss.variant.id;
+    const profile = boss.aiProfile;
     const damageScale = boss.damageScale;
     const bulletSpeedScale = boss.bulletSpeedScale || 1;
 
-    if (id === "titan") {
-      const total = 12;
+    const push = (angle, speed, damage, radius, life = 210) => {
+      state.enemyBullets.push({
+        x: boss.x,
+        y: boss.y,
+        vx: Math.cos(angle) * speed * bulletSpeedScale,
+        vy: Math.sin(angle) * speed * bulletSpeedScale,
+        life,
+        damage: damage * damageScale,
+        radius,
+        color: boss.variant.secondary,
+      });
+    };
+
+    if (profile === "titan" || profile === "colossus") {
+      const total = profile === "colossus" ? 14 : 12;
       for (let index = 0; index < total; index += 1) {
         const angle = (Math.PI * 2 * index) / total + boss.phase * 0.25;
-        state.enemyBullets.push({
-          x: boss.x,
-          y: boss.y,
-          vx: Math.cos(angle) * 3.4 * bulletSpeedScale,
-          vy: Math.sin(angle) * 3.4 * bulletSpeedScale,
-          life: 230,
-          damage: 12 * damageScale,
-          radius: 4,
-          color: "#ffc999",
-        });
+        push(angle, 3.4, 12, 4, 230);
       }
       return;
     }
 
-    if (id === "seraph") {
-      const total = 16;
+    if (profile === "seraph" || profile === "nebula") {
+      const total = profile === "nebula" ? 20 : 16;
       for (let index = 0; index < total; index += 1) {
         const angle = (Math.PI * 2 * index) / total + boss.phase * 0.38;
-        state.enemyBullets.push({
-          x: boss.x,
-          y: boss.y,
-          vx: Math.cos(angle) * 3 * bulletSpeedScale,
-          vy: Math.sin(angle) * 3 * bulletSpeedScale,
-          life: 250,
-          damage: 11 * damageScale,
-          radius: 3.7,
-          color: "#c9ddff",
-        });
+        push(angle, 3, 11, 3.7, 250);
+      }
+      return;
+    }
+
+    if (profile === "hydra") {
+      for (let arm = -1; arm <= 1; arm += 1) {
+        const base = Math.atan2(state.player.y - boss.y, state.player.x - boss.x) + arm * 0.3;
+        for (let i = -1; i <= 1; i += 1) {
+          push(base + i * 0.1, 4.2, 12, 3.9, 200);
+        }
+      }
+      return;
+    }
+
+    if (profile === "omega" || profile === "mythic") {
+      for (let i = 0; i < 2; i += 1) {
+        for (let ring = 0; ring < 10; ring += 1) {
+          const angle = (Math.PI * 2 * ring) / 10 + boss.phase * (0.2 + i * 0.06) + i * 0.16;
+          push(angle, 3.6 + i * 0.55, 12 + i * 1.5, 3.8, 220);
+        }
       }
       return;
     }
 
     const player = state.player;
     const base = Math.atan2(player.y - boss.y, player.x - boss.x);
-    for (let i = -3; i <= 3; i += 1) {
-      const angle = base + i * 0.11;
-      state.enemyBullets.push({
-        x: boss.x,
-        y: boss.y,
-        vx: Math.cos(angle) * 4 * bulletSpeedScale,
-        vy: Math.sin(angle) * 4 * bulletSpeedScale,
-        life: 190,
-        damage: 13 * damageScale,
-        radius: 4.2,
-        color: "#ebccff",
-      });
+    const spread = profile === "zephyr" ? 0.15 : 0.11;
+    const shots = profile === "vortex" || profile === "quantum" ? 9 : 7;
+    const half = Math.floor(shots / 2);
+    for (let i = -half; i <= half; i += 1) {
+      push(base + i * spread, 4, 13, 4.2, 190);
     }
   }
 
@@ -3097,8 +3709,9 @@ if (arenaDom.canvas) {
     const angle = Math.atan2(player.y - boss.y, player.x - boss.x);
     const damageScale = boss.damageScale;
     const bulletSpeedScale = boss.bulletSpeedScale || 1;
+    const profile = boss.aiProfile;
 
-    if (boss.variant.id === "seraph") {
+    if (profile === "seraph" || profile === "zephyr") {
       for (let side = -1; side <= 1; side += 1) {
         const offsetAngle = angle + side * 0.14;
         state.enemyBullets.push({
@@ -3115,7 +3728,7 @@ if (arenaDom.canvas) {
       return;
     }
 
-    if (boss.variant.id === "wraith") {
+    if (profile === "wraith" || profile === "phantasm") {
       for (let i = -1; i <= 1; i += 1) {
         state.enemyBullets.push({
           x: boss.x + i * 16,
@@ -3126,6 +3739,57 @@ if (arenaDom.canvas) {
           damage: 15 * damageScale,
           radius: 5,
           color: "#eac4ff",
+        });
+      }
+      return;
+    }
+
+    if (profile === "inferno" || profile === "ember") {
+      for (let i = -2; i <= 2; i += 1) {
+        const a = angle + i * 0.2;
+        state.enemyBullets.push({
+          x: boss.x,
+          y: boss.y + 8,
+          vx: Math.cos(a) * 4.2 * bulletSpeedScale,
+          vy: Math.sin(a) * 4.2 * bulletSpeedScale,
+          life: 200,
+          damage: 15 * damageScale,
+          radius: 4.1,
+          color: "#ffb98f",
+        });
+      }
+      return;
+    }
+
+    if (profile === "aegis" || profile === "onyx") {
+      for (let ring = 0; ring < 6; ring += 1) {
+        const a = boss.phase * 0.5 + (Math.PI * 2 * ring) / 6;
+        state.enemyBullets.push({
+          x: boss.x + Math.cos(a) * 28,
+          y: boss.y + Math.sin(a) * 28,
+          vx: Math.cos(a) * 2.8 * bulletSpeedScale,
+          vy: Math.sin(a) * 2.8 * bulletSpeedScale,
+          life: 220,
+          damage: 14 * damageScale,
+          radius: 4.8,
+          color: "#d9e8ff",
+        });
+      }
+      return;
+    }
+
+    if (profile === "quantum") {
+      for (let i = 0; i < 2; i += 1) {
+        const shift = i === 0 ? 0.18 : -0.18;
+        state.enemyBullets.push({
+          x: boss.x,
+          y: boss.y,
+          vx: Math.cos(angle + shift) * 6.4 * bulletSpeedScale,
+          vy: Math.sin(angle + shift) * 6.4 * bulletSpeedScale,
+          life: 170,
+          damage: 17 * damageScale,
+          radius: 3.7,
+          color: "#efb7ff",
         });
       }
       return;
@@ -3180,15 +3844,69 @@ if (arenaDom.canvas) {
     }
 
     const player = state.player;
+    const profile = boss.aiProfile;
 
     boss.phase += 0.01 * dtFactor;
 
-    if (boss.variant.id === "titan") {
+    if (profile === "titan" || profile === "colossus") {
       boss.x = WIDTH / 2 + Math.sin(boss.phase * 1.6) * 260;
       boss.y = 98 + Math.sin(boss.phase * 2.8) * 20;
-    } else if (boss.variant.id === "seraph") {
+    } else if (profile === "seraph" || profile === "zephyr" || profile === "nebula") {
       boss.x = WIDTH / 2 + Math.sin(boss.phase * 2.3) * 290;
       boss.y = 110 + Math.cos(boss.phase * 3.4) * 34;
+    } else if (profile === "vortex" || profile === "mythic") {
+      const orbitRadius = 170 + Math.sin(boss.phase * 0.7) * 50;
+      boss.x = WIDTH / 2 + Math.cos(boss.phase * 1.6) * orbitRadius;
+      boss.y = 120 + Math.sin(boss.phase * 1.9) * 55;
+    } else if (profile === "inferno" || profile === "ember" || profile === "omega") {
+      boss.dashCooldown -= dt;
+      if (boss.dashCooldown <= 0) {
+        const a = Math.atan2(player.y - boss.y, player.x - boss.x);
+        boss.x = clamp(boss.x + Math.cos(a) * 180, 90, WIDTH - 90);
+        boss.y = clamp(boss.y + Math.sin(a) * 120, 60, HEIGHT * 0.55);
+        boss.dashCooldown = 1400;
+        addParticles(boss.x, boss.y, boss.variant.primary, 18, 2.6);
+      }
+      boss.y += Math.sin(boss.phase * 2.1) * 0.9;
+    } else if (profile === "aegis" || profile === "onyx") {
+      boss.x = WIDTH / 2 + Math.sin(boss.phase) * 90;
+      boss.y = 96 + Math.cos(boss.phase * 2.1) * 14;
+    } else if (profile === "hydra") {
+      boss.x = WIDTH / 2 + Math.sin(boss.phase * 1.3) * 220;
+      boss.y = 94 + Math.sin(boss.phase * 4.2) * 22;
+      boss.summonCooldown -= dt;
+      if (boss.summonCooldown <= 0 && state.enemies.length < 10) {
+        const spawnType = ["wasp", "spark", "raptor", "vortexling"][Math.floor(Math.random() * 4)];
+        const scaling = getEnemyStageScaling(state.stage);
+        const spawnConfig = ENEMY_TYPES[spawnType];
+        const hp = spawnConfig.hp(state.stage) * scaling.hp * 0.5;
+        state.enemies.push({
+          type: spawnType,
+          x: clamp(boss.x + (Math.random() - 0.5) * 140, 20, WIDTH - 20),
+          y: boss.y + 20,
+          radius: spawnConfig.radius || 14,
+          hp,
+          maxHp: hp,
+          speed: spawnConfig.speed(state.stage) * scaling.speed,
+          fireCooldown: 300 + Math.random() * spawnConfig.shootCooldown,
+          wobbleSeed: Math.random() * 9999,
+          drift: (Math.random() - 0.5) * 0.7,
+          phase: Math.random() * Math.PI * 2,
+          teleportCooldown: 1200,
+          dashCooldown: 1200,
+          pulseTimer: 0,
+          mirrorSign: Math.random() > 0.5 ? 1 : -1,
+        });
+        boss.summonCooldown = 3200;
+      }
+    } else if (profile === "quantum" || profile === "phantasm" || profile === "wraith") {
+      boss.phaseShiftCooldown -= dt;
+      if (boss.phaseShiftCooldown <= 0) {
+        boss.x = 120 + Math.random() * (WIDTH - 240);
+        boss.y = 76 + Math.random() * 90;
+        boss.phaseShiftCooldown = profile === "quantum" ? 900 : 1450;
+        addParticles(boss.x, boss.y, boss.variant.secondary, 22, 2.6);
+      }
     } else {
       boss.jumpCooldown -= dt;
       if (boss.jumpCooldown <= 0) {
@@ -3202,14 +3920,14 @@ if (arenaDom.canvas) {
     boss.burstCooldown -= dt;
     if (boss.burstCooldown <= 0) {
       fireBossBurst(boss);
-      const baseCooldown = boss.variant.id === "seraph" ? 760 : 980;
+      const baseCooldown = profile === "seraph" || profile === "zephyr" ? 760 : profile === "omega" ? 680 : 980;
       boss.burstCooldown = baseCooldown * boss.fireRateScale;
     }
 
     boss.missileCooldown -= dt;
     if (boss.missileCooldown <= 0) {
       fireBossMissile(boss);
-      const baseCooldown = boss.variant.id === "wraith" ? 1180 : 1400;
+      const baseCooldown = profile === "wraith" || profile === "quantum" ? 1080 : profile === "hydra" ? 1000 : 1400;
       boss.missileCooldown = baseCooldown * boss.fireRateScale;
     }
 
@@ -3217,24 +3935,24 @@ if (arenaDom.canvas) {
 
     if (boss.laser.mode === "idle" && boss.laser.timer <= 0) {
       boss.laser.mode = "charge";
-      boss.laser.timer = boss.variant.id === "wraith" ? 700 : 1100;
+      boss.laser.timer = profile === "wraith" || profile === "quantum" ? 700 : 1100;
       boss.laser.angle = Math.atan2(player.y - boss.y, player.x - boss.x);
       boss.laser.sweepDir = player.x >= boss.x ? 1 : -1;
     }
 
     if (boss.laser.mode === "charge" && boss.laser.timer <= 0) {
       boss.laser.mode = "fire";
-      boss.laser.timer = boss.variant.id === "seraph" ? 1200 : 900;
+      boss.laser.timer = profile === "seraph" || profile === "zephyr" ? 1200 : 900;
       boss.laser.angle = Math.atan2(player.y - boss.y, player.x - boss.x);
     }
 
-    if (boss.laser.mode === "fire" && boss.variant.id === "seraph") {
+    if (boss.laser.mode === "fire" && (profile === "seraph" || profile === "zephyr" || profile === "nebula")) {
       boss.laser.angle += boss.laser.sweepDir * 0.014 * dtFactor;
     }
 
     if (boss.laser.mode === "fire" && boss.laser.timer <= 0) {
       boss.laser.mode = "idle";
-      boss.laser.timer = boss.variant.id === "wraith" ? 1800 : 2500;
+      boss.laser.timer = profile === "wraith" || profile === "quantum" ? 1800 : 2500;
     }
   }
 
@@ -3294,8 +4012,36 @@ if (arenaDom.canvas) {
     return picks;
   }
 
+  function applyUpgradeSetToPlayer(player, upgrades) {
+    if (!Array.isArray(upgrades) || upgrades.length === 0) return;
+    upgrades.forEach((upgrade) => {
+      if (upgrade && typeof upgrade.apply === "function") {
+        upgrade.apply(player, upgrade.tier);
+      }
+    });
+  }
+
+  function buildPrivateBoostUpgrades() {
+    const pool = [...UPGRADE_POOL];
+    if (pool.length === 0) return [];
+
+    for (let index = pool.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [pool[index], pool[swapIndex]] = [pool[swapIndex], pool[index]];
+    }
+
+    const picks = [];
+    while (picks.length < 100) {
+      const base = pool[picks.length % pool.length];
+      picks.push({ ...base, tier: base.tier || pickUpgradeTier() });
+    }
+    return picks;
+  }
+
   function startNextStage() {
+    const previousWorld = getWorldForStage(state.stage);
     state.stage += 1;
+    persistWorldProgress(state.stage);
     state.running = true;
     state.pendingUpgrades = null;
     hideUpgradeSelection();
@@ -3303,12 +4049,31 @@ if (arenaDom.canvas) {
     resetStageProgress();
     applyPlaneStartingLoadout();
     syncPlaneUnlocks();
-    triggerStageTransition(`STAGE ${state.stage}`, getTheme().name);
+    const world = getWorldForStage(state.stage);
+    const stageInWorld = getStageInWorld(state.stage);
+    if (world > previousWorld) {
+      triggerStageTransition(
+        "NEW WORLD",
+        `WORLD ${world} • ${getTheme().name}`
+      );
+      return;
+    }
+
+    triggerStageTransition(
+      `STAGE ${state.stage} • WORLD ${world}`,
+      `${getTheme().name} • ${stageInWorld}/${STAGES_PER_WORLD}`
+    );
   }
 
   function completeStage() {
     if (state.stageCompleted) return;
     state.stageCompleted = true;
+
+    if (state.stage >= FINAL_STAGE) {
+      completeGame();
+      return;
+    }
+
     const upgrades = buildUpgradeOptions();
     state.running = false;
     state.pendingUpgrades = upgrades;
@@ -3453,6 +4218,7 @@ if (arenaDom.canvas) {
     );
 
     state.enemies.forEach((enemy) => {
+      const config = ENEMY_TYPES[enemy.type] || ENEMY_TYPES.scout;
       enemy.phase += 0.02 * dtFactor;
       const toPlayerX = player.x - enemy.x;
       const toPlayerY = player.y - enemy.y;
@@ -3461,29 +4227,123 @@ if (arenaDom.canvas) {
       let vx = (toPlayerX / dist) * enemy.speed;
       let vy = (toPlayerY / dist) * enemy.speed;
 
-      if (enemy.type === "scout") {
-        vx += Math.sin(enemy.phase + enemy.wobbleSeed) * 1.1;
-      }
-
-      if (enemy.type === "striker") {
-        vy += Math.sin(enemy.phase * 2) * 0.9;
-      }
-
-      if (enemy.type === "bomber") {
-        vy = Math.max(0.45, vy * 0.7);
-      }
-
-      if (enemy.type === "sniper") {
-        const desired = 220;
-        if (dist < desired) {
-          vx = -(toPlayerX / dist) * enemy.speed;
-          vy = -(toPlayerY / dist) * enemy.speed;
+      switch (config.movePattern) {
+        case "wobble":
+          vx += Math.sin(enemy.phase + enemy.wobbleSeed) * 1.1;
+          break;
+        case "strikerWave":
+          vy += Math.sin(enemy.phase * 2) * 0.9;
+          break;
+        case "bomberGlide":
+          vy = Math.max(0.45, vy * 0.7);
+          break;
+        case "kite": {
+          const desired = 220;
+          if (dist < desired) {
+            vx = -(toPlayerX / dist) * enemy.speed;
+            vy = -(toPlayerY / dist) * enemy.speed;
+          }
+          break;
         }
-      }
-
-      if (enemy.type === "interceptor") {
-        vx += Math.cos(enemy.phase * 4) * 1.6;
-        vy += Math.sin(enemy.phase * 3) * 1.2;
+        case "zigzag":
+          vx += Math.cos(enemy.phase * 4) * 1.6;
+          vy += Math.sin(enemy.phase * 3) * 1.2;
+          break;
+        case "strafe":
+          vx += Math.cos(enemy.phase * 1.8) * 1.25;
+          break;
+        case "teleport":
+          enemy.teleportCooldown -= dt;
+          if (enemy.teleportCooldown <= 0) {
+            enemy.x = clamp(player.x + (Math.random() - 0.5) * 260, 20, WIDTH - 20);
+            enemy.y = clamp(player.y - 70 - Math.random() * 120, -10, HEIGHT * 0.6);
+            enemy.teleportCooldown = 900 + Math.random() * 1100;
+            addParticles(enemy.x, enemy.y, config.color, 10, 1.7);
+          }
+          break;
+        case "bulwark":
+          vx *= 0.5;
+          vy *= 0.42;
+          break;
+        case "swarm":
+          vx += Math.cos(enemy.phase * 5.2) * 2;
+          vy += Math.sin(enemy.phase * 4.3) * 1.6;
+          break;
+        case "orbitRush": {
+          const orbitAngle = enemy.phase * 1.8;
+          vx = Math.cos(orbitAngle) * enemy.speed + (toPlayerX / dist) * enemy.speed * 0.45;
+          vy = Math.sin(orbitAngle) * enemy.speed + (toPlayerY / dist) * enemy.speed * 0.45;
+          break;
+        }
+        case "sineWide":
+          vx += Math.sin(enemy.phase * 1.4) * 1.8;
+          vy += 0.35;
+          break;
+        case "hoverStall":
+          if (dist < 180) {
+            vx *= 0.35;
+            vy *= 0.35;
+          }
+          vy += Math.sin(enemy.phase * 2.2) * 0.6;
+          break;
+        case "weave":
+          vx += Math.sin(enemy.phase * 3.4) * 1.4;
+          vy += Math.cos(enemy.phase * 2.7) * 1.1;
+          break;
+        case "anchor":
+          vx *= 0.45;
+          vy = Math.max(-0.2, vy * 0.2);
+          break;
+        case "flank":
+          vx += (player.x > enemy.x ? -1 : 1) * 1.8;
+          break;
+        case "mimic":
+          vx = (aim.x || 0) * enemy.speed * 1.15 + (toPlayerX / dist) * enemy.speed * 0.35;
+          vy = (aim.y || 1) * enemy.speed * 1.15 + (toPlayerY / dist) * enemy.speed * 0.35;
+          break;
+        case "spiralDive": {
+          const spin = enemy.phase * 3.2;
+          vx = Math.cos(spin) * enemy.speed * 1.15;
+          vy = Math.sin(spin) * enemy.speed * 0.9 + 0.7;
+          break;
+        }
+        case "backstep":
+          if (dist < 170) {
+            vx = -(toPlayerX / dist) * enemy.speed * 1.2;
+            vy = -(toPlayerY / dist) * enemy.speed * 1.2;
+          }
+          break;
+        case "pulse":
+          enemy.pulseTimer += dt;
+          if (enemy.pulseTimer > 1200) {
+            enemy.pulseTimer = 0;
+            vx *= 2.2;
+            vy *= 2.2;
+          }
+          break;
+        case "hunter":
+          vx *= 1.2;
+          vy *= 1.2;
+          break;
+        case "feint":
+          if (Math.sin(enemy.phase * 2.2) > 0.55) {
+            vx = -(toPlayerX / dist) * enemy.speed * 0.9;
+          }
+          break;
+        case "echo":
+          vx += Math.sin(enemy.phase + enemy.wobbleSeed) * 0.9;
+          vy += Math.sin(enemy.phase * 3.6) * 0.8;
+          break;
+        case "storm":
+          vx += Math.cos(enemy.phase * 5.4) * 1.9;
+          vy += Math.sin(enemy.phase * 4.9) * 1.5;
+          break;
+        case "suppressor":
+          vx *= 0.75;
+          vy *= 0.72;
+          break;
+        default:
+          break;
       }
 
       enemy.x += vx * dtFactor;
@@ -3495,7 +4355,7 @@ if (arenaDom.canvas) {
       enemy.fireCooldown -= dt;
       if (enemy.fireCooldown <= 0) {
         fireEnemy(enemy);
-        const base = ENEMY_TYPES[enemy.type].shootCooldown;
+        const base = config.shootCooldown;
         const scaling = getEnemyStageScaling(state.stage);
         enemy.fireCooldown = base * (0.78 + Math.random() * 0.45) * scaling.fireCooldown;
       }
@@ -4427,9 +5287,16 @@ if (arenaDom.canvas) {
     ctx.fillStyle = "rgba(255,255,255,0.8)";
     ctx.font = "600 14px Rubik";
     ctx.textAlign = "left";
+    const world = getWorldForStage(state.stage);
+    const stageInWorld = getStageInWorld(state.stage);
+    const partyBadge = state.gameCompleted ? "🎉 " : "";
     const bossText = state.isBossStage ? " (Boss)" : "";
     const bossName = state.isBossStage && state.boss ? ` • ${state.boss.variant.name}` : "";
-    ctx.fillText(`Stage ${state.stage}${bossText} — ${getTheme().name}${bossName}`, 16, 24);
+    ctx.fillText(
+      `${partyBadge}World ${world}/${TOTAL_WORLDS} • Stage ${state.stage} (${stageInWorld}/${STAGES_PER_WORLD})${bossText} — ${getTheme().name}${bossName}`,
+      16,
+      24
+    );
   }
 
   function drawStageTransition() {
@@ -4437,6 +5304,8 @@ if (arenaDom.canvas) {
       return;
     }
 
+    const titleText = String(state.stageTransitionTitle || "");
+    const isFlightTransition = /^STAGE\s|^NEW WORLD/.test(titleText);
     const progress = 1 - state.stageTransitionMs / state.stageTransitionDuration;
     const fadeIn = clamp(progress / 0.25, 0, 1);
     const fadeOut = clamp((1 - progress) / 0.28, 0, 1);
@@ -4479,6 +5348,71 @@ if (arenaDom.canvas) {
       ctx.fillStyle = "rgba(190,225,255,0.9)";
       ctx.font = "600 16px Rubik";
       ctx.fillText(state.stageTransitionSubtitle, WIDTH * 0.5, HEIGHT * 0.49);
+    }
+
+    if (isFlightTransition) {
+      const flightProgress = easeOutCubic(clamp(progress, 0, 1));
+      const shipX = -120 + (WIDTH + 240) * flightProgress;
+      const shipY = HEIGHT * 0.66 + Math.sin(progress * Math.PI * 2.6) * 22;
+
+      const gateX = WIDTH * 0.86;
+      const gateY = HEIGHT * 0.63;
+      const gateR = 22 + Math.sin(progress * Math.PI * 3.5) * 3;
+
+      ctx.strokeStyle = `rgba(165,235,255,${0.55 * alpha})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(gateX, gateY, gateR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = `rgba(140,210,255,${0.2 * alpha})`;
+      ctx.beginPath();
+      ctx.arc(gateX, gateY, gateR * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+
+      for (let index = 0; index < 10; index += 1) {
+        const trailT = index / 10;
+        const streakX = shipX - 20 - trailT * 220;
+        const streakY = shipY + (index % 2 === 0 ? -1 : 1) * (6 + trailT * 10);
+        const streakAlpha = (0.45 - trailT * 0.34) * alpha;
+        ctx.strokeStyle = `rgba(145,225,255,${Math.max(0, streakAlpha)})`;
+        ctx.lineWidth = Math.max(1, 3 - trailT * 2.1);
+        ctx.beginPath();
+        ctx.moveTo(streakX, streakY);
+        ctx.lineTo(streakX - 40, streakY);
+        ctx.stroke();
+      }
+
+      ctx.save();
+      ctx.translate(shipX, shipY);
+      ctx.rotate(0.06);
+      const scale = 1 + Math.sin(progress * Math.PI) * 0.18;
+      ctx.scale(scale, scale);
+
+      ctx.shadowColor = "rgba(140, 240, 255, 0.8)";
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = "rgba(236, 250, 255, 0.95)";
+      ctx.beginPath();
+      ctx.moveTo(24, 0);
+      ctx.lineTo(-16, -11);
+      ctx.lineTo(-8, 0);
+      ctx.lineTo(-16, 11);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(125, 230, 255, 0.88)";
+      ctx.fillRect(-20, -3, 10, 6);
+
+      ctx.fillStyle = "rgba(255, 210, 140, 0.9)";
+      ctx.beginPath();
+      ctx.moveTo(-20, 0);
+      ctx.lineTo(-36, -4);
+      ctx.lineTo(-36, 4);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
     }
 
     const shardAlpha = alpha * (1 - Math.abs(0.5 - progress) * 1.1);
@@ -4549,6 +5483,8 @@ if (arenaDom.canvas) {
     );
     // תיקון: מתחיל שלב חדש מיד, overlay ייסגר אוטומטית
     selected.apply(state.player, selected.tier);
+    state.chosenUpgrades.push(selected);
+    renderPlaneDock();
     state.player.hp = state.player.maxHp;
     state.score += 30;
     startNextStage();
@@ -4588,6 +5524,35 @@ if (arenaDom.canvas) {
     resetGame();
   }
 
+  function setPrivateBoostMode(enabled) {
+    state.privateBoostEnabled = Boolean(enabled);
+    if (state.privateBoostEnabled) {
+      state.highestWorldReached = Math.max(state.highestWorldReached, 9);
+      saveWorldProgress();
+      try {
+        localStorage.setItem(PRIVATE_BOOST_KEY, "1");
+      } catch {
+        // ignore storage failures
+      }
+    } else {
+      state.privateBoostUpgrades = [];
+      state.chosenUpgrades = [];
+      try {
+        localStorage.removeItem(PRIVATE_BOOST_KEY);
+      } catch {
+        // ignore storage failures
+      }
+    }
+
+    showOverlay(
+      "Private Mode Updated",
+      "Changes will apply after you reset."
+    );
+    setTimeout(() => {
+      hideOverlay();
+    }, 1100);
+  }
+
   window.activateHaloCreatorMode = (code) => {
     if (code !== CREATOR_ACCESS_CODE) {
       return false;
@@ -4603,6 +5568,19 @@ if (arenaDom.canvas) {
     return true;
   };
 
+  window.enableHaloPrivateBoost = (code) => {
+    if (code !== PRIVATE_BOOST_ACCESS_CODE) {
+      return false;
+    }
+    setPrivateBoostMode(true);
+    return true;
+  };
+
+  window.disableHaloPrivateBoost = () => {
+    setPrivateBoostMode(false);
+    return true;
+  };
+
   if (localStorage.getItem(CREATOR_MODE_KEY) === "1") {
     state.creatorMode = true;
     enforceCreatorModePlanes();
@@ -4615,10 +5593,58 @@ if (arenaDom.canvas) {
     return tagName === "input" || tagName === "textarea" || tagName === "select" || element.isContentEditable;
   }
 
+  function setupPanelToggle(panelElement, storageKey, panelLabel) {
+    if (!panelElement) return;
+
+    const heading = panelElement.querySelector("h3");
+    const toggleButton = document.createElement("button");
+    toggleButton.type = "button";
+    toggleButton.className = "panel-toggle-btn";
+
+    const applyCollapsedState = (collapsed) => {
+      panelElement.classList.toggle("panel-collapsed", collapsed);
+      toggleButton.textContent = collapsed ? "פתח" : "סגור";
+      const action = collapsed ? "פתח" : "סגור";
+      toggleButton.title = `${action} ${panelLabel}`;
+      toggleButton.setAttribute("aria-label", `${action} ${panelLabel}`);
+      toggleButton.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    };
+
+    let isCollapsed = false;
+    try {
+      isCollapsed = localStorage.getItem(storageKey) === "1";
+    } catch {
+      isCollapsed = false;
+    }
+
+    applyCollapsedState(isCollapsed);
+
+    toggleButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const collapsedNow = !panelElement.classList.contains("panel-collapsed");
+      applyCollapsedState(collapsedNow);
+      try {
+        localStorage.setItem(storageKey, collapsedNow ? "1" : "0");
+      } catch {
+        // ignore storage failures
+      }
+    });
+
+    if (heading) {
+      heading.insertAdjacentElement("afterend", toggleButton);
+    } else {
+      panelElement.prepend(toggleButton);
+    }
+  }
+
   setMusicButtonLabel();
   if (arenaDom.musicBtn) {
     arenaDom.musicBtn.classList.add("hidden");
   }
+
+  setupPanelToggle(arenaDom.planeDock, "haloArenaPlaneDockCollapsedV1", "טבלת המטוסים");
+  setupPanelToggle(arenaDom.mpPanel, "haloArenaBattlePanelCollapsedV1", "טבלת הקרבות");
 
   window.addEventListener("keydown", (event) => {
     const key = event.key.toLowerCase();
@@ -4725,6 +5751,12 @@ if (arenaDom.canvas) {
 
     document.addEventListener("fullscreenchange", () => {
       setFullscreenButtonLabel();
+    });
+  }
+
+  if (arenaDom.resetWorldsBtn) {
+    arenaDom.resetWorldsBtn.addEventListener("click", () => {
+      resetWorldProgress();
     });
   }
 

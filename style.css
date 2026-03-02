@@ -424,6 +424,33 @@ canvas {
   text-shadow: 0 0 10px rgba(241, 196, 15, 0.35);
 }
 
+.upgrade-summary-title {
+  margin: 0 0 0.25rem;
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.upgrade-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  min-height: 1.1rem;
+  margin-bottom: 0.35rem;
+}
+
+.upgrade-summary-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.02rem;
+  height: 1.02rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.76rem;
+  line-height: 1;
+}
+
 .plane-list {
   display: grid;
   gap: 0.3rem;
@@ -555,22 +582,60 @@ canvas {
   color: rgba(255, 214, 166, 0.92);
 }
 
+.panel-toggle-btn {
+  width: 100%;
+  min-height: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.58rem;
+  cursor: pointer;
+  padding: 0.15rem 0.3rem;
+}
+
+.panel-toggle-btn:hover {
+  background: rgba(140, 255, 26, 0.14);
+  border-color: rgba(140, 255, 26, 0.48);
+}
+
+.plane-dock.panel-collapsed,
+.mp-panel.panel-collapsed {
+  width: 98px;
+  max-height: none;
+  overflow: hidden;
+  padding: 0.36rem;
+}
+
+.plane-dock.panel-collapsed > :not(h3):not(.panel-toggle-btn),
+.mp-panel.panel-collapsed > :not(h3):not(.panel-toggle-btn) {
+  display: none !important;
+}
+
+.plane-dock.panel-collapsed h3,
+.mp-panel.panel-collapsed h3 {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
 .mp-panel {
   position: absolute;
   right: 0.85rem;
   top: 0.85rem;
   transform: none;
-  width: 172px;
-  max-height: 58%;
-  overflow: hidden;
+  width: 126px;
+  max-height: 38%;
+  overflow-y: auto;
+  overflow-x: hidden;
   background: rgba(4, 10, 20, 0.72);
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 0.55rem;
+  padding: 0.42rem;
   z-index: 3;
   backdrop-filter: blur(4px);
   display: grid;
-  gap: 0.36rem;
+  gap: 0.24rem;
 }
 
 .mp-panel h3,
@@ -579,40 +644,46 @@ canvas {
 }
 
 .mp-panel h3 {
-  font-size: 0.95rem;
+  font-size: 0.78rem;
 }
 
 .mp-panel h4 {
-  font-size: 0.74rem;
+  font-size: 0.62rem;
   color: var(--muted);
 }
 
 .mp-label {
-  font-size: 0.66rem;
+  font-size: 0.58rem;
   color: var(--muted);
 }
 
 .mp-input {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 6px;
   background: rgba(8, 16, 30, 0.65);
   color: var(--text);
-  padding: 0.33rem 0.4rem;
+  padding: 0.22rem 0.28rem;
   font-family: inherit;
-  font-size: 0.73rem;
+  font-size: 0.62rem;
 }
 
 .mp-status {
   margin: 0;
-  font-size: 0.66rem;
+  font-size: 0.58rem;
   color: #8de1ff;
+}
+
+.mp-panel .btn {
+  min-height: 24px;
+  padding: 0.18rem 0.3rem;
+  font-size: 0.56rem;
 }
 
 .mp-users {
   display: grid;
-  gap: 0.28rem;
-  max-height: 112px;
+  gap: 0.2rem;
+  max-height: 54px;
   overflow-y: auto;
   padding-right: 0.1rem;
 }
@@ -624,9 +695,9 @@ canvas {
 }
 
 .mp-invite-row .btn {
-  min-height: 30px;
-  padding: 0.25rem 0.45rem;
-  font-size: 0.62rem;
+  min-height: 24px;
+  padding: 0.18rem 0.32rem;
+  font-size: 0.56rem;
 }
 
 .mp-user {
@@ -635,13 +706,13 @@ canvas {
   justify-content: space-between;
   gap: 0.22rem;
   border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  padding: 0.23rem 0.28rem;
+  border-radius: 6px;
+  padding: 0.14rem 0.2rem;
   background: rgba(255, 255, 255, 0.04);
 }
 
 .mp-user-name {
-  font-size: 0.64rem;
+  font-size: 0.56rem;
   color: rgba(225, 246, 255, 0.96);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -660,16 +731,16 @@ canvas {
 
 .mp-incoming {
   border: 1px solid rgba(141, 225, 255, 0.4);
-  border-radius: 10px;
-  padding: 0.34rem;
+  border-radius: 8px;
+  padding: 0.22rem;
   background: rgba(110, 190, 255, 0.09);
   display: grid;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .mp-incoming p {
   margin: 0;
-  font-size: 0.66rem;
+  font-size: 0.58rem;
 }
 
 .mp-actions {
@@ -678,9 +749,9 @@ canvas {
 }
 
 .mp-actions .btn {
-  min-height: 32px;
-  padding: 0.35rem 0.45rem;
-  font-size: 0.65rem;
+  min-height: 24px;
+  padding: 0.18rem 0.32rem;
+  font-size: 0.56rem;
 }
 
 .upgrade-grid {
@@ -693,8 +764,11 @@ canvas {
 .upgrade-btn {
   min-height: 104px;
   text-align: right;
+  display: flex;
+  flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
+  gap: 0.32rem;
   white-space: normal;
   background: linear-gradient(120deg, var(--surface-2), var(--surface));
   border: 2px solid var(--accent);
@@ -705,6 +779,17 @@ canvas {
   box-shadow: 0 0 18px 0 rgba(140,255,26,0.18);
   transition: background 0.2s, box-shadow 0.2s, transform 0.2s;
   padding: 0.7rem 1.2rem;
+}
+
+.upgrade-icon {
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.upgrade-label {
+  display: block;
+  font-size: 0.96rem;
+  line-height: 1.22;
 }
 
 .upgrade-btn:hover {
@@ -765,13 +850,19 @@ canvas {
   }
 
   .mp-panel {
-    width: 136px;
-    max-height: 52%;
-    padding: 0.45rem;
+    width: 102px;
+    max-height: 34%;
+    padding: 0.34rem;
+  }
+
+  .plane-dock.panel-collapsed,
+  .mp-panel.panel-collapsed {
+    width: 84px;
+    padding: 0.28rem;
   }
 
   .mp-users {
-    max-height: 84px;
+    max-height: 44px;
   }
 }
 

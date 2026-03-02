@@ -37,11 +37,13 @@
           <div class="hud-item">ניקוד: <strong id="haScore">0</strong></div>
           <div class="hud-item">חיים: <strong id="haHealth">100</strong></div>
           <div class="hud-item">גל: <strong id="haWave">1</strong></div>
+          <div class="hud-item">עולם: <strong id="haWorld">1</strong></div>
           <div class="hud-item">נשק: <strong id="haWeapon">Rifle</strong></div>
           <div class="hud-item">Dash: <strong id="haDash">Ready</strong></div>
           <div class="hud-item">Pulse: <strong id="haPulse">Ready</strong></div>
           <button id="haMusicBtn" class="btn">מוזיקה: כבוי</button>
           <button id="haFullscreenBtn" class="btn">מסך מלא</button>
+          <button id="haResetWorldsBtn" class="btn btn-outline">Reset Worlds</button>
           <button id="haRestartBtn" class="btn">התחל מחדש</button>
         </section>
 
@@ -50,6 +52,8 @@
             <h3>Hangar</h3>
             <p id="haCoins" class="coin-counter">🪙 מטבעות: 0</p>
             <p id="haPlaneActive">מטוס פעיל: 1</p>
+            <p id="haUpgradeSummaryTitle" class="upgrade-summary-title">Added Upgrades:</p>
+            <div id="haUpgradeSummary" class="upgrade-summary" aria-label="Added upgrades"></div>
             <div id="haPlaneList" class="plane-list"></div>
           </aside>
           <aside id="haMpPanel" class="mp-panel" aria-label="Multiplayer Duels">
