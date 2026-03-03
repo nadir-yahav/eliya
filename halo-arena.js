@@ -17,6 +17,7 @@ const arenaDom = {
   overlayBtn: document.getElementById("haOverlayBtn"),
   upgrade: document.getElementById("haUpgrade"),
   upgradeText: document.getElementById("haUpgradeText"),
+  upgradeTimer: document.getElementById("haUpgradeTimer"),
   upg1: document.getElementById("haUpg1"),
   upg2: document.getElementById("haUpg2"),
   upg3: document.getElementById("haUpg3"),
@@ -26,6 +27,7 @@ const arenaDom = {
   planeDock: document.getElementById("haPlaneDock"),
   shopPanel: document.getElementById("haShopPanel"),
   secretPanel: document.getElementById("haSecretPanel"),
+  playerPanel: document.getElementById("haPlayerPanel"),
   planeList: document.getElementById("haPlaneList"),
   planeActive: document.getElementById("haPlaneActive"),
   upgradeSummary: document.getElementById("haUpgradeSummary"),
@@ -639,6 +641,7 @@ if (arenaDom.canvas) {
   const DEFAULT_MULTIPLAYER_WS_URL =
     localStorage.getItem("haloArenaWsUrl") ||
     `${location.protocol === "https:" ? "wss" : "ws"}://${location.hostname}:8080`;
+  const MULTIPLAYER_NAME_KEY = "haloArenaPlayerName";
   const PLANE_PROGRESS_KEY = "haloArenaPlaneProgressV2";
   const WORLD_PROGRESS_KEY = "haloArenaWorldProgressV1";
   const CHOSEN_UPGRADES_KEY = "haloArenaChosenUpgradesV1";
@@ -678,17 +681,18 @@ if (arenaDom.canvas) {
       const accentHue = (hue + 72 + (id % 27) * 3) % 360;
       const trimHue = (hue + 180 + id * 2) % 360;
       const tierBoost = 1 + id * 0.012;
+      const isPlane1000 = id === 1000;
       return {
         id,
         name: `מטוס ${id}`,
         title: `Type-${id} ${archetype.name}`,
-        primary: `hsl(${hue}, 92%, 62%)`,
-        secondary: `hsl(${(hue + 48) % 360}, 95%, 72%)`,
-        glow: `hsla(${hue}, 100%, 75%, 0.75)`,
-        trim: `hsl(${trimHue}, 96%, 78%)`,
-        canopy: `hsla(${accentHue}, 95%, 72%, 0.85)`,
-        engine: `hsla(${(hue + 210) % 360}, 100%, 74%, 0.9)`,
-        contrail: `hsla(${(accentHue + 20) % 360}, 95%, 74%, 0.52)`,
+        primary: isPlane1000 ? "#0a0a0a" : `hsl(${hue}, 92%, 62%)`,
+        secondary: isPlane1000 ? "#f2f2f2" : `hsl(${(hue + 48) % 360}, 95%, 72%)`,
+        glow: isPlane1000 ? "rgba(255,255,255,0.75)" : `hsla(${hue}, 100%, 75%, 0.75)`,
+        trim: isPlane1000 ? "#ffffff" : `hsl(${trimHue}, 96%, 78%)`,
+        canopy: isPlane1000 ? "rgba(210,210,210,0.9)" : `hsla(${accentHue}, 95%, 72%, 0.85)`,
+        engine: isPlane1000 ? "rgba(235,235,235,0.92)" : `hsla(${(hue + 210) % 360}, 100%, 74%, 0.9)`,
+        contrail: isPlane1000 ? "rgba(255,255,255,0.58)" : `hsla(${(accentHue + 20) % 360}, 95%, 74%, 0.52)`,
         visual: {
           wingType: id % 5,
           finType: Math.floor(id / 3) % 4,
@@ -745,6 +749,27 @@ if (arenaDom.canvas) {
       return { unlockedPlaneCount, activePlaneId, creatorMode, coins };
     } catch {
       return { unlockedPlaneCount: 1, activePlaneId: 1, creatorMode: false, coins: 0 };
+    }
+  }
+
+  function loadPersistentMultiplayerName() {
+    try {
+      const raw = localStorage.getItem(MULTIPLAYER_NAME_KEY);
+      if (!raw) return "";
+      return String(raw).trim().replace(/\s+/g, " ").slice(0, 24);
+    } catch {
+      return "";
+    }
+  }
+
+  function savePersistentMultiplayerName(name) {
+    const normalizedName = String(name || "").trim().replace(/\s+/g, " ").slice(0, 24);
+    try {
+      if (normalizedName) {
+        localStorage.setItem(MULTIPLAYER_NAME_KEY, normalizedName);
+      }
+    } catch {
+      // ignore storage failures
     }
   }
 
@@ -1234,6 +1259,7 @@ if (arenaDom.canvas) {
   const initialPlaneProgress = loadPlaneProgress();
   const initialWorldProgress = loadWorldProgress();
   const initialChosenUpgrades = [];
+  const initialMultiplayerName = loadPersistentMultiplayerName();
   const initialPrivateBoostEnabled = (() => {
     try {
       return localStorage.getItem(PRIVATE_BOOST_KEY) === "1";
@@ -1275,11 +1301,13 @@ if (arenaDom.canvas) {
     chosenUpgrades: initialChosenUpgrades,
     selectedUpgradeSlot: -1,
     upgradeAutoPickTimer: null,
+    upgradeCountdownTimer: null,
+    upgradeLotteryTimer: null,
     multiplayer: {
       connected: false,
       socket: null,
       myId: null,
-      name: "",
+      name: initialMultiplayerName,
       serverUrl: DEFAULT_MULTIPLAYER_WS_URL,
       selectedMode: "1v1",
       queueing: false,
@@ -1291,6 +1319,7 @@ if (arenaDom.canvas) {
     stageTransitionDuration: 0,
     stageTransitionTitle: "",
     stageTransitionSubtitle: "",
+    stageTransitionFlight: false,
     gameCompleted: false,
     privateBoostEnabled: initialPrivateBoostEnabled,
     privateBoostUpgrades: [],
@@ -1418,6 +1447,14 @@ if (arenaDom.canvas) {
       clearTimeout(state.upgradeAutoPickTimer);
       state.upgradeAutoPickTimer = null;
     }
+    if (state.upgradeCountdownTimer) {
+      clearInterval(state.upgradeCountdownTimer);
+      state.upgradeCountdownTimer = null;
+    }
+    if (state.upgradeLotteryTimer) {
+      clearInterval(state.upgradeLotteryTimer);
+      state.upgradeLotteryTimer = null;
+    }
     state.availableUpgrades = upgrades;
     const availableSlots = state.availableUpgrades
       .map((upgrade, index) => (upgrade ? index : -1))
@@ -1469,29 +1506,130 @@ if (arenaDom.canvas) {
 
     arenaDom.upgrade.classList.remove("hidden");
 
+    const getRarestUpgradeSlotFromAvailable = () => {
+      const slots = state.availableUpgrades
+        .map((upgrade, index) => (upgrade ? index : -1))
+        .filter((index) => index >= 0);
+      if (slots.length === 0) return -1;
+
+      let rarestChance = Infinity;
+      slots.forEach((slot) => {
+        const chance = Number(state.availableUpgrades[slot]?.tier?.chance);
+        const normalizedChance = Number.isFinite(chance) ? chance : 1;
+        if (normalizedChance < rarestChance) {
+          rarestChance = normalizedChance;
+        }
+      });
+
+      const rareSlots = slots.filter((slot) => {
+        const chance = Number(state.availableUpgrades[slot]?.tier?.chance);
+        const normalizedChance = Number.isFinite(chance) ? chance : 1;
+        return normalizedChance === rarestChance;
+      });
+
+      return rareSlots[Math.floor(Math.random() * rareSlots.length)];
+    };
+
+    const renderUpgradeCountdown = (secondsLeft) => {
+      if (!arenaDom.upgradeTimer) return;
+      const normalized = clamp(secondsLeft, 0, 10);
+      const ratio = normalized / 10;
+      const fontSizeRem = 1.25 + ratio * 2.1;
+      const scale = 0.92 + ratio * 0.18;
+      arenaDom.upgradeTimer.textContent = String(normalized);
+      arenaDom.upgradeTimer.style.fontSize = `${fontSizeRem.toFixed(2)}rem`;
+      arenaDom.upgradeTimer.style.transform = `scale(${scale.toFixed(2)})`;
+      arenaDom.upgradeTimer.style.opacity = normalized <= 2 ? "1" : "0.96";
+    };
+
+    let secondsLeft = 10;
+    renderUpgradeCountdown(secondsLeft);
+
+    state.upgradeCountdownTimer = setInterval(() => {
+      if (state.running || arenaDom.upgrade.classList.contains("hidden")) {
+        return;
+      }
+
+      secondsLeft = Math.max(0, secondsLeft - 1);
+      renderUpgradeCountdown(secondsLeft);
+    }, 1000);
+
     state.upgradeAutoPickTimer = setTimeout(() => {
       if (state.running || arenaDom.upgrade.classList.contains("hidden")) {
         return;
       }
 
-      const availableSlots = state.availableUpgrades
-        .map((upgrade, index) => (upgrade ? index : -1))
-        .filter((index) => index >= 0);
+      if (state.upgradeCountdownTimer) {
+        clearInterval(state.upgradeCountdownTimer);
+        state.upgradeCountdownTimer = null;
+      }
 
-      if (availableSlots.length === 0) {
+      const rarestSlot = getRarestUpgradeSlotFromAvailable();
+      if (rarestSlot < 0) {
         startNextStage();
         return;
       }
 
-      const randomSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
-      chooseUpgrade(randomSlot);
-    }, 10000);
+      const lotterySlots = getAvailableUpgradeSlots();
+      if (lotterySlots.length === 0) {
+        startNextStage();
+        return;
+      }
+
+      arenaDom.upgradeText.textContent = "🎲 Lottery in progress...";
+      let spinIndex = 0;
+      state.upgradeLotteryTimer = setInterval(() => {
+        if (state.running || arenaDom.upgrade.classList.contains("hidden")) {
+          return;
+        }
+        state.selectedUpgradeSlot = lotterySlots[spinIndex % lotterySlots.length];
+        updateUpgradeSelectionVisual();
+        spinIndex += 1;
+      }, 85);
+
+      setTimeout(() => {
+        if (state.upgradeLotteryTimer) {
+          clearInterval(state.upgradeLotteryTimer);
+          state.upgradeLotteryTimer = null;
+        }
+        if (state.running || arenaDom.upgrade.classList.contains("hidden")) {
+          return;
+        }
+        state.selectedUpgradeSlot = rarestSlot;
+        updateUpgradeSelectionVisual();
+        const selectedUpgrade = state.availableUpgrades[rarestSlot];
+        if (selectedUpgrade) {
+          arenaDom.upgradeText.textContent = `🏆 You got: ${selectedUpgrade.title} [${selectedUpgrade.tier.name}]`;
+        }
+
+        setTimeout(() => {
+          if (state.running || arenaDom.upgrade.classList.contains("hidden")) {
+            return;
+          }
+          chooseUpgrade(rarestSlot);
+        }, 650);
+      }, 1250);
+    }, 10050);
   }
 
   function hideUpgradeSelection() {
     if (state.upgradeAutoPickTimer) {
       clearTimeout(state.upgradeAutoPickTimer);
       state.upgradeAutoPickTimer = null;
+    }
+    if (state.upgradeCountdownTimer) {
+      clearInterval(state.upgradeCountdownTimer);
+      state.upgradeCountdownTimer = null;
+    }
+    if (state.upgradeLotteryTimer) {
+      clearInterval(state.upgradeLotteryTimer);
+      state.upgradeLotteryTimer = null;
+    }
+    if (arenaDom.upgradeTimer) {
+      arenaDom.upgradeTimer.textContent = "10";
+      arenaDom.upgradeTimer.style.fontSize = "3rem";
+      arenaDom.upgradeTimer.style.transform = "scale(1)";
+      arenaDom.upgradeTimer.style.opacity = "1";
     }
     state.selectedUpgradeSlot = -1;
     updateUpgradeSelectionVisual();
@@ -2358,9 +2496,12 @@ if (arenaDom.canvas) {
     }
   }
 
-  function showOverlay(title, text) {
+  function showOverlay(title, text, showRestartButton = false) {
     arenaDom.overlayTitle.textContent = title;
     arenaDom.overlayText.textContent = text;
+    if (arenaDom.overlayBtn) {
+      arenaDom.overlayBtn.classList.toggle("hidden", !showRestartButton);
+    }
     arenaDom.overlay.classList.remove("hidden");
   }
 
@@ -2368,11 +2509,12 @@ if (arenaDom.canvas) {
     arenaDom.overlay.classList.add("hidden");
   }
 
-  function triggerStageTransition(title, subtitle = "") {
-    state.stageTransitionDuration = 1500;
+  function triggerStageTransition(title, subtitle = "", withFlight = false) {
+    state.stageTransitionDuration = withFlight ? 4000 : 1500;
     state.stageTransitionMs = state.stageTransitionDuration;
     state.stageTransitionTitle = title;
     state.stageTransitionSubtitle = subtitle;
+    state.stageTransitionFlight = Boolean(withFlight);
   }
 
   function sanitizePlayerName(rawName) {
@@ -2636,6 +2778,7 @@ if (arenaDom.canvas) {
 
     const name = sanitizePlayerName(arenaDom.mpName?.value || "");
     state.multiplayer.name = name;
+    savePersistentMultiplayerName(name);
     if (arenaDom.mpName) {
       arenaDom.mpName.value = name;
     }
@@ -3457,7 +3600,7 @@ if (arenaDom.canvas) {
         button.textContent = "Owned";
         button.disabled = true;
       } else {
-        button.textContent = "Buy";
+        button.textContent = "Pay";
       }
 
       row.appendChild(label);
@@ -4485,14 +4628,16 @@ if (arenaDom.canvas) {
     if (world > previousWorld) {
       triggerStageTransition(
         "NEW WORLD",
-        `WORLD ${world} • ${getTheme().name}`
+        `WORLD ${world} • ${getTheme().name}`,
+        true
       );
       return;
     }
 
     triggerStageTransition(
       `STAGE ${state.stage} • WORLD ${world}`,
-      `${getTheme().name} • ${stageInWorld}/${STAGES_PER_WORLD}`
+      `${getTheme().name} • ${stageInWorld}/${STAGES_PER_WORLD}`,
+      true
     );
   }
 
@@ -4508,10 +4653,6 @@ if (arenaDom.canvas) {
     const upgrades = buildUpgradeOptions();
     state.running = false;
     state.pendingUpgrades = upgrades;
-    const subtitle = state.isBossStage
-      ? `Boss ${getBossTier(state.stage)} Defeated`
-      : `Stage ${state.stage} Cleared`;
-    triggerStageTransition("YOU WIN", subtitle);
   }
 
   function playerTakeDamage(amount) {
@@ -4535,7 +4676,7 @@ if (arenaDom.canvas) {
       state.chosenUpgrades = [];
       saveChosenUpgradesProgress();
       renderPlaneDock();
-      showOverlay("Game Over", `ניקוד: ${Math.floor(state.score)} | הגעת לשלב ${state.stage} | השדרוגים אופסו`);
+      showOverlay("Game Over", `ניקוד: ${Math.floor(state.score)} | הגעת לשלב ${state.stage} | השדרוגים אופסו`, true);
     }
   }
 
@@ -4554,9 +4695,17 @@ if (arenaDom.canvas) {
     if (player.tempRapid > 0) player.tempRapid -= dt;
     if (player.tempSpread > 0) player.tempSpread -= dt;
     if (player.tempPower > 0) player.tempPower -= dt;
+    const wasFlightTransitionActive = isFlightTransitionActive();
     if (state.stageTransitionMs > 0) {
       state.stageTransitionMs = Math.max(0, state.stageTransitionMs - dt);
     }
+    if (wasFlightTransitionActive && state.stageTransitionMs <= 0) {
+      const landing = getFlightTransitionShipPosition(1);
+      player.x = clamp(landing.x, 24, WIDTH - 24);
+      player.y = clamp(landing.y, 24, HEIGHT - 24);
+    }
+
+    const transitionFlightActive = isFlightTransitionActive();
 
     if (state.running && player.hp > 0) {
       player.hp = Math.min(player.maxHp, player.hp + plane.regenPerSecond * (dt / 1000));
@@ -4577,6 +4726,11 @@ if (arenaDom.canvas) {
       return;
     }
 
+    if (transitionFlightActive) {
+      updateHud();
+      return;
+    }
+
     if (!state.running) {
       if (state.pendingUpgrades && state.stageTransitionMs <= 0) {
         const queuedUpgrades = state.pendingUpgrades;
@@ -4589,23 +4743,25 @@ if (arenaDom.canvas) {
 
     let moveX = 0;
     let moveY = 0;
-    if (keys.has("w") || keys.has("arrowup")) moveY -= 1;
-    if (keys.has("s") || keys.has("arrowdown")) moveY += 1;
-    if (keys.has("a") || keys.has("arrowleft")) moveX -= 1;
-    if (keys.has("d") || keys.has("arrowright")) moveX += 1;
+    if (!transitionFlightActive) {
+      if (keys.has("w") || keys.has("arrowup")) moveY -= 1;
+      if (keys.has("s") || keys.has("arrowdown")) moveY += 1;
+      if (keys.has("a") || keys.has("arrowleft")) moveX -= 1;
+      if (keys.has("d") || keys.has("arrowright")) moveX += 1;
 
-    moveX += gamepadInput.moveX;
-    moveY += gamepadInput.moveY;
-    moveX += touchJoystickState.moveX;
-    moveY += touchJoystickState.moveY;
+      moveX += gamepadInput.moveX;
+      moveY += gamepadInput.moveY;
+      moveX += touchJoystickState.moveX;
+      moveY += touchJoystickState.moveY;
 
-    if (touchInput.active) {
-      const dx = touchInput.targetX - player.x;
-      const dy = touchInput.targetY - player.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist > 10) {
-        moveX += dx / dist;
-        moveY += dy / dist;
+      if (touchInput.active) {
+        const dx = touchInput.targetX - player.x;
+        const dy = touchInput.targetY - player.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 10) {
+          moveX += dx / dist;
+          moveY += dy / dist;
+        }
       }
     }
 
@@ -4619,7 +4775,9 @@ if (arenaDom.canvas) {
     player.x = clamp(player.x, 24, WIDTH - 24);
     player.y = clamp(player.y, 24, HEIGHT - 24);
 
-    firePlayer();
+    if (!transitionFlightActive) {
+      firePlayer();
+    }
 
     if (!state.isBossStage && state.stageSpawned < state.stageGoal) {
       state.stageSpawnCooldown -= dt;
@@ -5031,14 +5189,11 @@ if (arenaDom.canvas) {
     ctx.fill();
   }
 
-  function drawPlayerPlane() {
-    const player = state.player;
-    const angle = aim.angle;
-    const plane = getActivePlane();
+  function drawPlaneModel(plane, x, y, angle, alpha = 1, now = performance.now(), scale = 1) {
+    if (!plane) return;
     const visual = plane.visual;
     const wingSpan = 13 * plane.wingScale;
     const bodyTail = 23 + plane.id * 0.03;
-    const now = performance.now();
     const thrusterPulse = 1 + Math.sin(now * 0.02 + plane.id * 0.09) * 0.26;
     const glowPulse = 1 + Math.sin(now * 0.012 + plane.id * 0.13) * 0.18;
     const wingFront = wingSpan * (0.62 + visual.wingType * 0.07);
@@ -5047,10 +5202,9 @@ if (arenaDom.canvas) {
     const wingInset = visual.wingInset;
 
     ctx.save();
-    ctx.translate(player.x, player.y);
+    ctx.translate(x, y);
     ctx.rotate(angle + Math.PI / 2);
-
-    const alpha = player.invuln > 0 ? 0.65 + Math.sin(performance.now() * 0.03) * 0.2 : 1;
+    ctx.scale(scale, scale);
     ctx.globalAlpha = alpha;
 
     ctx.shadowColor = plane.glow;
@@ -5195,6 +5349,15 @@ if (arenaDom.canvas) {
 
     ctx.globalAlpha = 1;
     ctx.restore();
+  }
+
+  function drawPlayerPlane() {
+    const player = state.player;
+    const angle = aim.angle;
+    const plane = getActivePlane();
+    const now = performance.now();
+    const alpha = player.invuln > 0 ? 0.65 + Math.sin(now * 0.03) * 0.2 : 1;
+    drawPlaneModel(plane, player.x, player.y, angle, alpha, now, 1);
 
     if (player.shieldLayers > 0) {
       ctx.strokeStyle = "rgba(141, 214, 255, 0.65)";
@@ -5470,6 +5633,58 @@ if (arenaDom.canvas) {
     ctx.arc(boss.x, boss.y, bodyRadius * (1.02 + wingPulse * 0.06), 0, Math.PI * 2);
     ctx.stroke();
 
+    const ringSpin = now * 0.0012;
+    ctx.save();
+    ctx.translate(boss.x, boss.y);
+    ctx.rotate(ringSpin);
+    ctx.strokeStyle = `${variant.secondary}88`;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, bodyRadius * 1.35, bodyRadius * 0.52, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.rotate(-ringSpin * 1.7);
+    ctx.strokeStyle = `${variant.primary}99`;
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, bodyRadius * 1.1, bodyRadius * 0.4, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(boss.x, boss.y);
+    ctx.rotate(angle + Math.PI / 2);
+    ctx.globalAlpha = 0.18 + wingPulse * 0.24;
+    const flareGradient = ctx.createLinearGradient(0, -bodyRadius * 1.1, 0, bodyRadius * 0.8);
+    flareGradient.addColorStop(0, `${variant.secondary}cc`);
+    flareGradient.addColorStop(1, `${variant.primary}00`);
+    ctx.fillStyle = flareGradient;
+    ctx.beginPath();
+    ctx.moveTo(0, -bodyRadius * 0.88);
+    ctx.lineTo(bodyRadius * 1.36, bodyRadius * 0.1);
+    ctx.lineTo(bodyRadius * 0.38, bodyRadius * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, -bodyRadius * 0.88);
+    ctx.lineTo(-bodyRadius * 1.36, bodyRadius * 0.1);
+    ctx.lineTo(-bodyRadius * 0.38, bodyRadius * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    for (let sparkIndex = 0; sparkIndex < 12; sparkIndex += 1) {
+      const sparkT = sparkIndex / 12;
+      const sparkAngle = now * 0.0024 + sparkT * Math.PI * 2;
+      const sparkRadius = bodyRadius * (0.95 + 0.24 * Math.sin(now * 0.004 + sparkIndex));
+      const sparkX = boss.x + Math.cos(sparkAngle) * sparkRadius;
+      const sparkY = boss.y + Math.sin(sparkAngle) * sparkRadius * 0.68;
+      const sparkSize = 1.3 + (sparkIndex % 3) * 0.7;
+      ctx.fillStyle = `rgba(255,255,255,${0.3 + glowPulse * 0.35})`;
+      ctx.beginPath();
+      ctx.arc(sparkX, sparkY, sparkSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     ctx.save();
     ctx.translate(boss.x, boss.y);
     ctx.rotate(angle + Math.PI / 2);
@@ -5735,13 +5950,36 @@ if (arenaDom.canvas) {
     );
   }
 
+  function isFlightTransitionActive() {
+    if (state.stageTransitionMs <= 0 || state.stageTransitionDuration <= 0) {
+      return false;
+    }
+    return state.stageTransitionFlight === true;
+  }
+
+  function getFlightTransitionLandingPoint() {
+    return {
+      x: WIDTH * 0.5,
+      y: HEIGHT * 0.16,
+    };
+  }
+
+  function getFlightTransitionShipPosition(progress) {
+    const landing = getFlightTransitionLandingPoint();
+    const startY = HEIGHT + 140;
+    const speedCurve = Math.min(1, easeOutCubic(clamp(progress * 1.18, 0, 1)));
+    return {
+      x: landing.x,
+      y: startY + (landing.y - startY) * speedCurve,
+    };
+  }
+
   function drawStageTransition() {
     if (state.stageTransitionMs <= 0 || state.stageTransitionDuration <= 0) {
       return;
     }
 
-    const titleText = String(state.stageTransitionTitle || "");
-    const isFlightTransition = /^STAGE\s|^NEW WORLD/.test(titleText);
+    const isFlightTransition = isFlightTransitionActive();
     const progress = 1 - state.stageTransitionMs / state.stageTransitionDuration;
     const fadeIn = clamp(progress / 0.25, 0, 1);
     const fadeOut = clamp((1 - progress) / 0.28, 0, 1);
@@ -5749,7 +5987,15 @@ if (arenaDom.canvas) {
     const sweep = easeOutCubic(clamp(progress, 0, 1));
     const lineY = HEIGHT * (0.18 + 0.64 * sweep);
 
+    let cameraOffsetY = 0;
+    if (isFlightTransition) {
+      const shipPosition = getFlightTransitionShipPosition(progress);
+      const followStrength = clamp((1 - progress) * 1.45, 0, 1);
+      cameraOffsetY = clamp((shipPosition.y - HEIGHT * 0.5) * 0.55, -180, 180) * followStrength;
+    }
+
     ctx.save();
+    ctx.translate(0, -cameraOffsetY);
     ctx.globalAlpha = alpha;
 
     const vignette = ctx.createRadialGradient(WIDTH * 0.5, HEIGHT * 0.45, 20, WIDTH * 0.5, HEIGHT * 0.45, WIDTH * 0.75);
@@ -5787,13 +6033,32 @@ if (arenaDom.canvas) {
     }
 
     if (isFlightTransition) {
-      const flightProgress = easeOutCubic(clamp(progress, 0, 1));
-      const shipX = -120 + (WIDTH + 240) * flightProgress;
-      const shipY = HEIGHT * 0.66 + Math.sin(progress * Math.PI * 2.6) * 22;
+      const activePlane = getActivePlane();
+      const shipPosition = getFlightTransitionShipPosition(progress);
+      const shipX = shipPosition.x;
+      const shipY = shipPosition.y;
+      const lightSpeedPower = clamp(Math.sin(progress * Math.PI), 0, 1);
 
-      const gateX = WIDTH * 0.86;
-      const gateY = HEIGHT * 0.63;
-      const gateR = 22 + Math.sin(progress * Math.PI * 3.5) * 3;
+      for (let index = 0; index < 52; index += 1) {
+        const laneX = ((index * 97.31) % (WIDTH + 120)) - 60;
+        const drift = Math.sin(progress * 12 + index * 1.37) * 7;
+        const streakX = laneX + drift;
+        const travel = (progress * (HEIGHT + 340) * 2.1 + index * 48.7) % (HEIGHT + 260);
+        const streakY = HEIGHT + 130 - travel;
+        const streakLen = 24 + ((index * 17) % 54) * (0.42 + lightSpeedPower * 0.9);
+        const streakAlpha = (0.08 + lightSpeedPower * 0.42) * (1 - (index % 5) * 0.08);
+
+        ctx.strokeStyle = `rgba(190,230,255,${Math.max(0.05, streakAlpha).toFixed(3)})`;
+        ctx.lineWidth = 1 + ((index * 11) % 3) * 0.7;
+        ctx.beginPath();
+        ctx.moveTo(streakX, streakY + streakLen * 0.5);
+        ctx.lineTo(streakX, streakY - streakLen);
+        ctx.stroke();
+      }
+
+      const gateX = WIDTH * 0.5;
+      const gateY = getFlightTransitionLandingPoint().y;
+      const gateR = 30 + Math.sin(progress * Math.PI * 3.5) * 4;
 
       ctx.strokeStyle = `rgba(165,235,255,${0.55 * alpha})`;
       ctx.lineWidth = 3;
@@ -5806,49 +6071,27 @@ if (arenaDom.canvas) {
       ctx.arc(gateX, gateY, gateR * 0.7, 0, Math.PI * 2);
       ctx.fill();
 
-      for (let index = 0; index < 10; index += 1) {
-        const trailT = index / 10;
-        const streakX = shipX - 20 - trailT * 220;
-        const streakY = shipY + (index % 2 === 0 ? -1 : 1) * (6 + trailT * 10);
-        const streakAlpha = (0.45 - trailT * 0.34) * alpha;
-        ctx.strokeStyle = `rgba(145,225,255,${Math.max(0, streakAlpha)})`;
-        ctx.lineWidth = Math.max(1, 3 - trailT * 2.1);
+      for (let index = 0; index < 13; index += 1) {
+        const trailT = index / 13;
+        const streakX = shipX + (index % 2 === 0 ? -1 : 1) * (6 + trailT * 8);
+        const streakY = shipY + 18 + trailT * 240;
+        const streakAlpha = (0.5 - trailT * 0.36) * alpha;
+        const contrailColor = String(activePlane?.contrail || "rgba(145,225,255,0.52)");
+        const colorWithAlpha = contrailColor.replace(/0\.[0-9]+\)|1\)/, `${Math.max(0.12, Math.min(0.9, streakAlpha)).toFixed(2)})`);
+        ctx.strokeStyle = colorWithAlpha;
+        ctx.lineWidth = Math.max(1, 3.8 - trailT * 2.3);
         ctx.beginPath();
         ctx.moveTo(streakX, streakY);
-        ctx.lineTo(streakX - 40, streakY);
+        ctx.lineTo(streakX, streakY + 42);
         ctx.stroke();
       }
 
       ctx.save();
-      ctx.translate(shipX, shipY);
-      ctx.rotate(0.06);
-      const scale = 1 + Math.sin(progress * Math.PI) * 0.18;
-      ctx.scale(scale, scale);
-
-      ctx.shadowColor = "rgba(140, 240, 255, 0.8)";
-      ctx.shadowBlur = 20;
-      ctx.fillStyle = "rgba(236, 250, 255, 0.95)";
-      ctx.beginPath();
-      ctx.moveTo(24, 0);
-      ctx.lineTo(-16, -11);
-      ctx.lineTo(-8, 0);
-      ctx.lineTo(-16, 11);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = "rgba(125, 230, 255, 0.88)";
-      ctx.fillRect(-20, -3, 10, 6);
-
-      ctx.fillStyle = "rgba(255, 210, 140, 0.9)";
-      ctx.beginPath();
-      ctx.moveTo(-20, 0);
-      ctx.lineTo(-36, -4);
-      ctx.lineTo(-36, 4);
-      ctx.closePath();
-      ctx.fill();
-
       ctx.restore();
+
+      const shipAngle = -Math.PI / 2;
+      const shipScale = 1.25 + Math.sin(progress * Math.PI) * 0.2;
+      drawPlaneModel(activePlane, shipX, shipY, shipAngle, alpha, performance.now(), shipScale);
     }
 
     const shardAlpha = alpha * (1 - Math.abs(0.5 - progress) * 1.1);
@@ -5878,13 +6121,21 @@ if (arenaDom.canvas) {
       return;
     }
 
+    if (isFlightTransitionActive()) {
+      drawBackground();
+      drawStageTransition();
+      return;
+    }
+
     drawBackground();
     drawPulse();
     drawBullets();
     state.enemies.forEach(drawEnemyPlane);
     drawBoss();
-    drawPlaneServants();
-    drawPlayerPlane();
+    if (!isFlightTransitionActive()) {
+      drawPlaneServants();
+      drawPlayerPlane();
+    }
     drawPickups();
     drawParticles();
     drawCrosshair();
@@ -5907,6 +6158,14 @@ if (arenaDom.canvas) {
     if (state.upgradeAutoPickTimer) {
       clearTimeout(state.upgradeAutoPickTimer);
       state.upgradeAutoPickTimer = null;
+    }
+    if (state.upgradeCountdownTimer) {
+      clearInterval(state.upgradeCountdownTimer);
+      state.upgradeCountdownTimer = null;
+    }
+    if (state.upgradeLotteryTimer) {
+      clearInterval(state.upgradeLotteryTimer);
+      state.upgradeLotteryTimer = null;
     }
 
     const selected = state.availableUpgrades[slot];
@@ -6086,6 +6345,7 @@ if (arenaDom.canvas) {
   setupPanelToggle(arenaDom.planeDock, "haloArenaPlaneDockCollapsedV1", "טבלת המטוסים");
   setupPanelToggle(arenaDom.shopPanel, "haloArenaShopPanelCollapsedV1", "חנות");
   setupPanelToggle(arenaDom.secretPanel, "haloArenaSecretPanelCollapsedV1", "Secret Code");
+  setupPanelToggle(arenaDom.playerPanel, "haloArenaPlayerPanelCollapsedV1", "Player Name");
   setupPanelToggle(arenaDom.mpPanel, "haloArenaBattlePanelCollapsedV1", "טבלת הקרבות");
 
   window.addEventListener("keydown", (event) => {
@@ -6337,6 +6597,15 @@ if (arenaDom.canvas) {
   }
 
   if (arenaDom.mpName) {
+    arenaDom.mpName.value = state.multiplayer.name || "";
+    arenaDom.mpName.addEventListener("input", () => {
+      const typedName = String(arenaDom.mpName.value || "").replace(/\s+/g, " ").slice(0, 24);
+      if (arenaDom.mpName.value !== typedName) {
+        arenaDom.mpName.value = typedName;
+      }
+      state.multiplayer.name = typedName;
+      savePersistentMultiplayerName(typedName);
+    });
     arenaDom.mpName.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();

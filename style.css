@@ -515,7 +515,28 @@ canvas {
   gap: 0.18rem;
 }
 
+.player-panel {
+  position: absolute;
+  right: 26.8rem;
+  top: 0.85rem;
+  width: 132px;
+  background: rgba(4, 10, 20, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.34rem;
+  z-index: 3;
+  backdrop-filter: blur(4px);
+  display: grid;
+  gap: 0.18rem;
+}
+
 .secret-panel h3 {
+  margin: 0;
+  font-size: 0.74rem;
+  color: rgba(255, 241, 196, 0.95);
+}
+
+.player-panel h3 {
   margin: 0;
   font-size: 0.74rem;
   color: rgba(255, 241, 196, 0.95);
@@ -770,7 +791,8 @@ canvas {
 .plane-dock.panel-collapsed,
 .mp-panel.panel-collapsed,
 .shop-panel.panel-collapsed,
-.secret-panel.panel-collapsed {
+.secret-panel.panel-collapsed,
+.player-panel.panel-collapsed {
   width: 98px;
   max-height: none;
   overflow: hidden;
@@ -780,14 +802,16 @@ canvas {
 .plane-dock.panel-collapsed > :not(h3):not(.panel-toggle-btn),
 .mp-panel.panel-collapsed > :not(h3):not(.panel-toggle-btn),
 .shop-panel.panel-collapsed > :not(h3):not(.panel-toggle-btn),
-.secret-panel.panel-collapsed > :not(h3):not(.panel-toggle-btn) {
+.secret-panel.panel-collapsed > :not(h3):not(.panel-toggle-btn),
+.player-panel.panel-collapsed > :not(h3):not(.panel-toggle-btn) {
   display: none !important;
 }
 
 .plane-dock.panel-collapsed h3,
 .mp-panel.panel-collapsed h3,
 .shop-panel.panel-collapsed h3,
-.secret-panel.panel-collapsed h3 {
+.secret-panel.panel-collapsed h3,
+.player-panel.panel-collapsed h3 {
   margin: 0;
   font-size: 0.72rem;
 }
@@ -934,6 +958,23 @@ canvas {
   gap: 0.6rem;
 }
 
+.upgrade-timer {
+  min-width: 72px;
+  min-height: 62px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  font-size: 3rem;
+  font-weight: 900;
+  line-height: 1;
+  margin-bottom: 0.15rem;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.32);
+  transition: font-size 0.16s ease, transform 0.16s ease, opacity 0.16s ease;
+}
+
 .upgrade-btn {
   min-height: 104px;
   text-align: right;
@@ -1035,6 +1076,12 @@ canvas {
     padding: 0.3rem;
   }
 
+  .player-panel {
+    right: 21.4rem;
+    width: 118px;
+    padding: 0.3rem;
+  }
+
   .mp-panel {
     width: 102px;
     max-height: 34%;
@@ -1044,7 +1091,8 @@ canvas {
   .plane-dock.panel-collapsed,
   .mp-panel.panel-collapsed,
   .shop-panel.panel-collapsed,
-  .secret-panel.panel-collapsed {
+  .secret-panel.panel-collapsed,
+  .player-panel.panel-collapsed {
     width: 84px;
     padding: 0.28rem;
   }

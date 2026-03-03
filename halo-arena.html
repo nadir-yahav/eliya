@@ -77,12 +77,15 @@
               <button id="haSecretCodeBtn" class="btn shop-buy-btn" type="button">Claim</button>
             </div>
           </aside>
+          <aside id="haPlayerPanel" class="player-panel" aria-label="Player name">
+            <h3>Player</h3>
+            <label class="shop-label" for="haMpName">Player Name</label>
+            <input id="haMpName" class="shop-input" maxlength="24" placeholder="Your name" />
+          </aside>
           <aside id="haMpPanel" class="mp-panel" aria-label="Multiplayer Duels">
             <h3>Multiplayer</h3>
             <label class="mp-label" for="haMpServer">Server URL</label>
             <input id="haMpServer" class="mp-input" maxlength="140" placeholder="wss://your-server.example.com" />
-            <label class="mp-label" for="haMpName">Player Name</label>
-            <input id="haMpName" class="mp-input" maxlength="24" placeholder="Your name" />
             <label class="mp-label" for="haMpMode">Mode</label>
             <select id="haMpMode" class="mp-input">
               <option value="1v1">1v1 (50 coins)</option>
@@ -126,6 +129,7 @@
           <div id="haUpgrade" class="overlay hidden">
             <h2>בחר שדרוג לשלב הבא</h2>
             <p id="haUpgradeText">כל שלב נותן 6 אפשרויות חדשות</p>
+            <div id="haUpgradeTimer" class="upgrade-timer" aria-live="polite">10</div>
             <div class="upgrade-grid">
               <button id="haUpg1" class="btn upgrade-btn">שדרוג 1</button>
               <button id="haUpg2" class="btn upgrade-btn">שדרוג 2</button>
